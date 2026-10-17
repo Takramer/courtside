@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react'
-import { draftSuggestions, snakePicks } from '../lib/model.js'
+import { draftSuggestions, likelyGone, positionOutlook, positionRun, roundTip, snakePicks } from '../lib/model.js'
 import { PlayerName, ValueTip, ZCell, catHeaders, fmt } from '../components.jsx'
 import { useLocal } from '../lib/store.js'
 
 const POS = ['All', 'PG', 'SG', 'SF', 'PF', 'C']
+const LEVEL = { now: ['bad', 'Take now'], soon: ['warn', 'Soon'], wait: ['info', 'Can wait'], covered: ['good', 'Covered'] }
 
 export default function Draft({ ctx }) {
   const { settings, values, mineSet, takenSet, players } = ctx
@@ -24,9 +25,25 @@ export default function Draft({ ctx }) {
   const reset = () => { if (confirm('Clear every pick, including your own team?')) { ctx.setMine([]); ctx.setTaken([]); setLog([]) } }
 
   const available = useMemo(() => players.filter((p) => !mineSet.has(p.id) && !takenSet.has(p.id)), [players, mineSet, takenSet])
-  const suggestions = useMemo(() => draftSuggestions({ available, mine: ctx.myPlayers, values, settings, nextPick, followingPick }).slice(0, 3),
-    [available, ctx.myPlayers, values, settings, nextPick, followingPick])
   const picksUntilMe = nextPick ? nextPick - current : 0
+  // Forecast from ADP: who the other teams take before my next pick, and before the one after.
+  const gone = useMemo(() => likelyGone(available, picksUntilMe), [available, picksUntilMe])
+  const goneLater = useMemo(() => (followingPick ? likelyGone(available, followingPick - current) : gone), [available, followingPick, current, gone])
+  const suggestions = useMemo(() => draftSuggestions({ available, mine: ctx.myPlayers, values, settings, nextPick, followingPick, gone, goneLater }).slice(0, 3),
+    [available, ctx.myPlayers, values, settings, nextPick, followingPick, gone, goneLater])
+  const outlook = positionOutlook({ available, mine: ctx.myPlayers, values, settings, gone, goneLater })
+  const round = Math.min(settings.rosterSize, Math.ceil(current / settings.teams))
+
+  // What the other teams just did: their picks since my last one, and any rush on one position.
+  const lastMine = log.findLastIndex((id) => mineSet.has(id))
+  const theirs = log.filter((id) => takenSet.has(id))
+  const sinceMine = log.slice(lastMine + 1).filter((id) => takenSet.has(id)).map((id) => ctx.byId.get(id)).filter(Boolean)
+  const run = positionRun(theirs.slice(-6).map((id) => ctx.byId.get(id)).filter(Boolean))
+
+  const onSearchKey = (e) => {
+    if (e.key !== 'Enter' || !q || !board[0] || mineSet.has(board[0].id) || takenSet.has(board[0].id)) return
+    pick(board[0].id, 'taken'); setQ('')
+  }
 
   const board = players
     .filter((p) => showTaken || (!mineSet.has(p.id) && !takenSet.has(p.id)))
@@ -57,7 +74,23 @@ export default function Draft({ ctx }) {
 
       {!done && (
         <section>
-          <h2>{onClock ? 'Take one of these now' : `Best fits for pick #${nextPick}`}</h2>
+          <h2>Round {round} of {settings.rosterSize}: the plan</h2>
+          <p>{roundTip(round, settings.rosterSize, settings)}</p>
+          {run && <div className="banner warn">Run on {run.pos}: {run.n} of the last {run.of} picks were {run.pos}s. Other teams are grabbing them, so the good ones left will not last.</div>}
+          <div className="pos5">
+            {outlook.map((o) => (
+              <div key={o.pos} className={`poscard ${o.level}`}>
+                <div><b>{o.pos}</b> <span className={`tag ${LEVEL[o.level][0]}`}>{LEVEL[o.level][1]}</span></div>
+                <small>You have {o.have}. {o.why}</small>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!done && (
+        <section>
+          <h2>{onClock ? 'Take one of these now' : `Likely still there at pick #${nextPick}`}</h2>
           <div className="suggest">
             {suggestions.map((s, i) => (
               <div className="card" key={s.p.id}>
@@ -69,13 +102,23 @@ export default function Draft({ ctx }) {
               </div>
             ))}
           </div>
-          {!onClock && picksUntilMe > 0 && <p className="muted">About {picksUntilMe} players will go before you pick. Anyone with an ADP under {nextPick} is likely gone.</p>}
+          {!onClock && gone.length > 0 && (
+            <p className="muted">Likely gone before your turn ({picksUntilMe} picks): {gone.slice(0, 9).map((p) => p.name).join(', ')}{gone.length > 9 ? ' and more' : ''}. These cards skip them, so they update as the real picks come in.</p>
+          )}
         </section>
       )}
 
+      {sinceMine.length > 0 && (
+        <section>
+          <h3>Since your last pick</h3>
+          <p className="muted">{sinceMine.map((p) => `${p.name} (${p.pos.join('/')})`).join(' · ')}</p>
+        </section>
+      )}
+      {theirs.length === 0 && !done && <p className="muted">When another team picks, type the name in the search box and press Enter to mark him Taken.</p>}
+
       <section>
         <div className="filters">
-          <input placeholder="Search player" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input placeholder="Search player, Enter = Taken" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
           <div className="seg">{POS.map((x) => <button key={x} className={pos === x ? 'on' : ''} onClick={() => setPos(x)}>{x}</button>)}</div>
           <label><input type="checkbox" checked={showTaken} onChange={(e) => setShowTaken(e.target.checked)} /> show drafted</label>
         </div>

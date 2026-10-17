@@ -1,6 +1,7 @@
 // Self-check for the fantasy math. Run: npm run check
 import assert from 'node:assert/strict'
-import { bestLineup, snakePicks, computeValues, evaluateTrade, weekBounds, tagNews, normName, blendLine, DEFAULT_SETTINGS } from './model.js'
+import { bestLineup, snakePicks, computeValues, evaluateTrade, weekBounds, tagNews, normName, blendLine, DEFAULT_SETTINGS,
+  likelyGone, positionOutlook, draftSuggestions, positionRun } from './model.js'
 
 // Lineup: a PG/SG star must not block the only pure PG from playing.
 const mk = (id, pos) => ({ id, pos })
@@ -30,6 +31,25 @@ assert.ok(v.get(0).val > v.get(50).val)
 assert.ok(Math.abs(v.get([...v.entries()].find(([, x]) => x.rank === 101)[0]).val) < 0.2) // replacement level ~ 0
 assert.equal(evaluateTrade([players[50]], [players[0]], v, DEFAULT_SETTINGS).verdict, 'accept')
 assert.equal(evaluateTrade([players[0]], [players[50]], v, DEFAULT_SETTINGS).verdict, 'decline')
+
+// Draft: ADP order predicts who goes first. With one good C left and him due to go before my following pick,
+// C reads "take now" and he outranks a slightly better SF who will still be there.
+const dp = [
+  { id: 'sf1', pos: ['SF'], adp: 10, val: 20 }, { id: 'sf2', pos: ['SF'], adp: 40, val: 19.5 },
+  { id: 'c1', pos: ['C'], adp: 12, val: 18 }, { id: 'c2', pos: ['C'], adp: 90, val: 8 },
+].map((p) => ({ ...p, inj: 'ACTIVE' }))
+const dv = new Map(dp.map((p) => [p.id, { seasonVal: p.val, z: {} }]))
+const pts = { ...DEFAULT_SETTINGS, format: 'points' }
+assert.deepEqual(likelyGone(dp, 2).map((p) => p.id), ['sf1', 'c1'])
+const later = likelyGone(dp, 2)
+const out = positionOutlook({ available: dp, mine: [], values: dv, settings: pts, gone: [], goneLater: later })
+assert.equal(out.find((o) => o.pos === 'C').level, 'now')
+assert.equal(out.find((o) => o.pos === 'SF').level, 'wait')
+assert.equal(draftSuggestions({ available: dp, mine: [], values: dv, settings: pts, nextPick: 5, followingPick: 16, goneLater: later })[0].p.id, 'c1')
+// Not on the clock: players expected to go first drop out of the suggestions.
+assert.ok(!draftSuggestions({ available: dp, mine: [], values: dv, settings: pts, gone: [dp[0]] }).some((s) => s.p.id === 'sf1'))
+assert.equal(positionRun([['C'], ['C'], ['PG'], ['C']].map((pos) => ({ pos }))).pos, 'C')
+assert.equal(positionRun([['C'], ['PG'], ['SF'], ['SG']].map((pos) => ({ pos }))), null)
 
 // News tags and name matching.
 assert.ok(tagNews('He will miss Friday due to personal reasons').some((t) => t.k === 'personal'))

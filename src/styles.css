@@ -187,3 +187,12 @@ ul.plain li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   h1 { font-size: 24px; }
   .t th, .t td { padding: 7px 6px; }
 }
+
+/* Draft: position priority */
+.pos5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 12px; }
+.poscard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.poscard b { font-size: 18px; }
+.poscard.now { border-color: rgba(239, 68, 68, 0.6); }
+.poscard.soon { border-color: rgba(245, 158, 11, 0.5); }
+@media (max-width: 760px) { .pos5 { grid-template-columns: repeat(2, 1fr); } }
+.filters input:not([type]) { min-width: 240px; }
