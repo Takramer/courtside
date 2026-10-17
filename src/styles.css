@@ -245,6 +245,6 @@ kbd { font: 600 11px/1 Inter, system-ui, sans-serif; color: var(--muted); paddin
 }
 
 /* Sonner toasts, in the app's colors */
-[data-sonner-toaster] { --normal-bg: var(--panel2); --normal-border: var(--line2); --normal-text: var(--text); --border-radius: var(--r); font-family: inherit; }
+:root [data-sonner-toaster][data-sonner-theme] { --normal-bg: var(--panel2); --normal-border: var(--line2); --normal-text: var(--text); --border-radius: var(--r); font-family: inherit; }
 [data-sonner-toast] { font-size: 14px; box-shadow: var(--shadow-pop); }
 [data-sonner-toast] [data-button] { background: var(--accent) !important; color: var(--accent-ink) !important; font-weight: 700; border-radius: 6px; }

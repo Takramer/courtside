@@ -31,3 +31,83 @@
   .clockbar .btn.ghost { order: 0; flex-basis: auto; max-width: 45%; }
   .find { order: 2; flex-basis: 100%; }
 }
+
+/* ---------- Draft room polish: everything below is scoped to .draftpage ---------- */
+
+/* Clock bar: a countdown box so "how long until I pick" reads at a glance. */
+.draftpage .clock { flex-direction: row; align-items: center; gap: 12px; }
+.draftpage .clocktext { display: flex; flex-direction: column; min-width: 0; color: var(--text); }
+.draftpage .clocktext b { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.draftpage .clocktext span { color: var(--muted); font-size: 13px; }
+.draftpage .clockbar.on .clocktext b { color: var(--accent); }
+.draftpage .count { color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 68px; padding: 6px 10px; border-radius: var(--r-s); background: var(--panel2); border: 1px solid var(--line2); }
+.draftpage .count b { font-size: 24px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.draftpage .count small { color: var(--muted); font-size: 11px; white-space: nowrap; margin-top: 3px; }
+.draftpage .clockbar.soon { border-color: rgba(245, 158, 11, 0.55); }
+.draftpage .clockbar.soon .count { border-color: rgba(245, 158, 11, 0.55); background: rgba(245, 158, 11, 0.1); }
+.draftpage .clockbar.soon .count b, .draftpage .clockbar.soon .clocktext b { color: var(--warn); }
+.draftpage .clockbar.on .count { background: var(--accent); border-color: var(--accent); }
+.draftpage .clockbar.on .count b, .draftpage .clockbar.on .count small { color: var(--accent-ink); }
+/* One small pop when your turn starts: it happens about 13 times a draft and says "look here". */
+.draftpage .clockbar.on .count { animation: draft-pop 220ms var(--ease-out); }
+@keyframes draft-pop { from { transform: scale(0.9); opacity: 0.6; } }
+
+/* Suggestion cards: the top pick leads; options 2 and 3 step back. */
+.draftpage .pickcard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px; }
+.draftpage .pickcard.best { border-color: rgba(255, 122, 26, 0.65); background: linear-gradient(180deg, rgba(255, 122, 26, 0.09), transparent 70%), var(--panel); box-shadow: 0 0 0 1px rgba(255, 122, 26, 0.18), 0 12px 28px rgba(0, 0, 0, 0.35); }
+.draftpage .pickhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.draftpage .pickrank { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.draftpage .pickcard.best .pickrank { color: var(--accent); }
+.draftpage .pickval { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.draftpage .pickval b { font-size: 20px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.draftpage .pickcard .pname { font-size: 18px; }
+.draftpage .pickcard.best .pname button.link { font-weight: 700; }
+.draftpage .pickcard ul { margin: 6px 0 10px; padding-left: 18px; color: var(--muted); font-size: 13px; flex: 1; }
+.draftpage .pickcard li + li { margin-top: 2px; }
+@media (max-width: 760px) { .draftpage .suggest { grid-template-columns: 1fr; } }
+
+/* My team so far: one chip per starting spot, filled or open. */
+.draftpage .myteam h3 { margin-top: 0; }
+.draftpage .slotstrip { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.draftpage .slotstrip li { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 220px; padding: 5px 10px 5px 6px; border: 1px dashed var(--line2); border-radius: var(--r-s); font-size: 13px; color: var(--muted); }
+.draftpage .slotstrip li.filled { border-style: solid; border-color: var(--line2); background: var(--panel); color: var(--text); }
+.draftpage .slotstrip .slot { flex: none; min-width: 28px; padding: 1px 5px; border-radius: 5px; background: var(--panel2); font-size: 11px; font-weight: 700; text-align: center; color: var(--muted); }
+.draftpage .slotstrip li.filled .slot { background: rgba(255, 122, 26, 0.16); color: var(--accent); }
+.draftpage .slotstrip button.link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+
+/* Board row actions: quiet until you point at a row, always full strength on touch and keyboard focus. */
+.draftpage .rowbtn { min-height: 28px; padding: 3px 10px; border-radius: 7px; border: 1px solid var(--line2); background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: transform 140ms var(--ease-out), opacity 120ms ease; }
+.draftpage .rowbtn + .rowbtn { margin-left: 6px; }
+.draftpage .rowbtn.mine { color: var(--accent); border-color: rgba(255, 122, 26, 0.45); }
+.draftpage .rowbtn:active { transform: scale(0.96); }
+@media (hover: hover) and (pointer: fine) {
+  .draftpage .t tbody .rowbtn { opacity: 0.45; }
+  .draftpage .t tbody tr:hover .rowbtn, .draftpage .t tbody tr:focus-within .rowbtn { opacity: 1; }
+  .draftpage .rowbtn:hover { color: var(--text); background: var(--panel2); border-color: var(--muted); }
+  .draftpage .rowbtn.mine:hover { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+}
+/* Mine vs Taken rows: orange edge and tag for yours, grey and faded for other teams. */
+.draftpage .owntag { display: inline-block; margin-right: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; vertical-align: middle; }
+.draftpage .owntag.mine { color: var(--accent); background: rgba(255, 122, 26, 0.14); }
+.draftpage .owntag.taken { color: var(--muted); background: var(--panel2); }
+.draftpage .t tr.own-mine td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.draftpage .t tr.own-taken td { opacity: 1; color: var(--muted); }
+.draftpage .t tr.own-taken td:not(.actions) > * { opacity: 0.55; }
+.draftpage .t tr.own-taken td.z { opacity: 0.4; }
+
+/* Phones: keep Mine / Taken pinned to the right edge while the stat columns scroll under them. */
+@media (max-width: 760px) {
+  .draftpage .t th:last-child, .draftpage .t td.actions { position: sticky; right: 0; background: var(--bg); box-shadow: -8px 0 12px -8px rgba(0, 0, 0, 0.8); }
+  .draftpage .t th:last-child { z-index: 1; }
+  .draftpage .t tr.own-mine td.actions { background: linear-gradient(rgba(255, 122, 26, 0.08), rgba(255, 122, 26, 0.08)), var(--bg); }
+  .draftpage .rowbtn { min-height: 36px; padding: 4px 12px; }
+  .draftpage .owntag { display: none; }
+  .draftpage .clocktext b { font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draftpage .clockbar.on .count { animation: none; }
+  .draftpage .rowbtn { transition: opacity 120ms ease; }
+  .draftpage .rowbtn:active { transform: none; }
+}

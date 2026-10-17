@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Command } from 'cmdk'
 import { CATS, etToday, gamesBetween, tagNews, weekBounds } from './lib/model.js'
+import './pages/extras.css'
 
 export const fmt = (x, d = 1) => (x == null || Number.isNaN(x) ? '–' : x.toFixed(d))
 export const ago = (iso) => {
@@ -89,34 +90,86 @@ export function plainTake(ctx, p) {
 
 const LINE_ROWS = [['proj', 'Projection (this season)'], ['cur', 'This season so far'], ['l15', 'Last 15 days'], ['last', 'Last season']]
 
+const STAT_HEAD = [['MIN', 'Minutes'], ['PTS', 'Points'], ['REB', 'Rebounds'], ['AST', 'Assists'], ['STL', 'Steals'], ['BLK', 'Blocks'], ['3PM', '3-pointers made'], ['FG%', 'Field goal %'], ['FT%', 'Free throw %'], ['TO', 'Turnovers (lower is better)'], ['GP', 'Games played']]
+const OWNERS = [['mine', 'On my team'], ['taken', 'Another team'], ['free', 'Available']]
+
 export function PlayerDrawer({ ctx, p, onClose }) {
   const [press, setPress] = useState(null)
-  useEffect(() => { setPress(null) }, [p.id])
-  useEffect(() => { const k = (e) => e.key === 'Escape' && onClose(); addEventListener('keydown', k); return () => removeEventListener('keydown', k) }, [onClose])
+  const ref = useRef(null)
+  useEffect(() => { setPress(null); if (ref.current) ref.current.scrollTop = 0 }, [p.id])
+  // Focus moves into the panel on open and back to whatever opened it on close.
+  useEffect(() => {
+    const back = document.activeElement
+    ref.current?.focus({ preventScroll: true })
+    return () => { if (back?.isConnected) back.focus({ preventScroll: true }) }
+  }, [])
+  // Esc closes; Tab stays inside the panel. Both skip when focus sits elsewhere (the ⌘K finder on top, a toast).
+  useEffect(() => {
+    const k = (e) => {
+      const el = ref.current; const a = document.activeElement
+      if (!el || !(el.contains(a) || a === document.body)) return
+      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Tab') return
+      const f = el.querySelectorAll('button:not(:disabled), a[href], input, [tabindex="0"]')
+      if (!f.length) return
+      if (e.shiftKey && (a === f[0] || a === el)) { e.preventDefault(); f[f.length - 1].focus() }
+      else if (!e.shiftKey && a === f[f.length - 1]) { e.preventDefault(); f[0].focus() }
+    }
+    addEventListener('keydown', k); return () => removeEventListener('keydown', k)
+  }, [onClose])
   const v = ctx.values.get(p.id)
   const inj = ctx.injuryBy.get(p.id)
   const news = ctx.newsBy.get(p.id) || []
   const owner = ctx.mineSet.has(p.id) ? 'mine' : ctx.takenSet.has(p.id) ? 'taken' : 'free'
+  const pts = ctx.settings.format === 'points'
   const loadPress = () => {
     setPress('loading')
     fetch(`/api/news?player=${encodeURIComponent(p.name)}`).then((r) => r.json())
       .then((j) => setPress(j.news.map((n) => ({ ...n, tags: tagNews(n.title) })))).catch(() => setPress([]))
   }
+  const facts = [
+    v && ['Value', fmt(v.val), 'How much better he is than the best free agent. 0 = anyone could replace him.'],
+    v && ['Rank', `#${v.rank}`, 'Where his value ranks among all players right now.'],
+    v && pts && ['Pts / game', fmt(v.fp), 'Fantasy points he should score per game in your league.'],
+    p.adp && ['Drafted', `~#${Math.round(p.adp)}`, 'Where managers usually pick him in ESPN drafts.'],
+  ].filter(Boolean)
   return (
     <div className="scrim" onClick={onClose}>
-      <aside className="drawer" onClick={(e) => e.stopPropagation()}>
-        <button className="x" onClick={onClose} aria-label="Close">×</button>
-        <h2>{p.name} <StatusBadge ctx={ctx} p={p} /></h2>
-        <div className="muted">{ctx.teams[p.team]?.name || 'Free agent'} · {p.pos.join('/')}{v && <> · Value {fmt(v.val)} · Rank #{v.rank}</>}</div>
-        <div className="seg">
-          {[['mine', 'On my team'], ['taken', 'On another team'], ['free', 'Available']].map(([k, label]) => (
-            <button key={k} className={owner === k ? 'on' : ''} onClick={() => ctx.setOwner(p.id, k)}>{label}</button>
-          ))}
-        </div>
-        {inj && <div className={`banner ${inj.status === 'Out' ? 'bad' : 'warn'}`}><b>{inj.status}:</b> {inj.comment}</div>}
-        <ul className="take">{plainTake(ctx, p).map((t, i) => <li key={i}>{t}</li>)}</ul>
+      <aside className="drawer" ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="drawer-title" onClick={(e) => e.stopPropagation()}>
+        <header className="dhead">
+          <div className="dtitle">
+            <h2 id="drawer-title">{p.name} <StatusBadge ctx={ctx} p={p} /></h2>
+            <div className="muted">{ctx.teams[p.team]?.name || 'Free agent'} · {p.pos.join('/')}</div>
+          </div>
+          <button className="x" onClick={onClose} aria-label="Close player panel">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+        </header>
 
-        {v && ctx.settings.format === 'cats' && (
+        {facts.length > 0 && (
+          <dl className="dfacts">
+            {facts.map(([k, val, why]) => <div key={k} title={why}><dt>{k}</dt><dd className="num">{val}</dd></div>)}
+          </dl>
+        )}
+
+        <div className="downer">
+          <span id="owner-label">Where is he?</span>
+          <div className="seg" role="group" aria-labelledby="owner-label">
+            {OWNERS.map(([k, label]) => (
+              <button key={k} className={owner === k ? 'on' : ''} aria-pressed={owner === k} onClick={() => ctx.moveTo(p.id, k)}>{label}</button>
+            ))}
+          </div>
+        </div>
+
+        {inj && <div className={`banner ${inj.status === 'Out' ? 'bad' : 'warn'}`}><b>{inj.status}:</b> {inj.comment}</div>}
+
+        <section className="dtake">
+          <h3>The short version</h3>
+          <ul className="take">{plainTake(ctx, p).map((t, i) => <li key={i}>{t}</li>)}</ul>
+        </section>
+
+        {v && ctx.settings.format === 'cats' && <>
+          <h3>Category by category</h3>
           <div className="catbars">
             {CATS.map((c) => (
               <div key={c.k} className={ctx.settings.punt.includes(c.k) ? 'punted' : ''}>
@@ -126,11 +179,12 @@ export function PlayerDrawer({ ctx, p, onClose }) {
               </div>
             ))}
           </div>
-        )}
+        </>}
 
-        <div className="scroll">
+        <h3>Stats per game</h3>
+        <div className="scroll dstats">
           <table className="t small">
-            <thead><tr><th>Per game</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>STL</th><th>BLK</th><th>3PM</th><th>FG%</th><th>FT%</th><th>TO</th><th>GP</th></tr></thead>
+            <thead><tr><th>Stretch</th>{STAT_HEAD.map(([k, t]) => <th key={k} className="num" title={t}>{k}</th>)}</tr></thead>
             <tbody>
               {LINE_ROWS.map(([k, label]) => {
                 const l = p.stats[k]; if (!l) return null

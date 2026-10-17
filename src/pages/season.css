@@ -1,0 +1,138 @@
+/* Season pages: Today, My team, Waivers. Everything is scoped under .season so other pages keep their look. */
+
+.season .sechead { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.season .sechead h2 { margin: 0; }
+.season .sechead > span, .season .sechead > a { font-size: 13px; }
+.season .hint { color: var(--muted); font-size: 13px; margin: 0 0 8px; text-wrap: pretty; }
+.season .lead { text-wrap: pretty; }
+.season h3 { margin-top: 18px; }
+.season h3:first-of-type { margin-top: 4px; }
+.season button.inline { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Stat cards that say what to do, tinted only when there is something to act on */
+.season .stat { gap: 2px; }
+.season .stat b { font-variant-numeric: tabular-nums; }
+.season .stat span { text-wrap: pretty; }
+.season .stat.warn { border-color: rgba(245, 158, 11, 0.5); background: linear-gradient(rgba(245, 158, 11, 0.07), rgba(245, 158, 11, 0.07)), var(--panel); }
+.season .stat.warn b { color: var(--warn); }
+.season .stat.good b { color: var(--good); }
+
+/* Today: the lineup */
+.lineup { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); overflow: hidden; }
+.lineup li { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto 56px; grid-template-areas: 'slot who game val'; align-items: center; gap: 4px 14px; padding: 10px 14px; border-top: 1px solid var(--line); min-height: 52px; }
+.lineup li:first-child { border-top: 0; }
+.lineup .tip { grid-area: slot; border-bottom: 0; justify-self: start; }
+.lineup .who { grid-area: who; min-width: 0; }
+.lineup .game { grid-area: game; color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lineup .game b { color: var(--text); font-weight: 600; }
+.lineup .val { grid-area: val; font-weight: 700; }
+.slotchip { display: inline-grid; place-items: center; min-width: 40px; height: 26px; padding: 0 6px; border-radius: 7px; background: var(--panel2); border: 1px solid var(--line2); font-size: 12px; font-weight: 800; letter-spacing: 0.03em; color: var(--text); }
+.lineup li.empty { grid-template-areas: 'slot fix fix fix'; background: rgba(239, 68, 68, 0.07); box-shadow: inset 3px 0 0 var(--bad); }
+.lineup li.empty .slotchip { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.5); color: var(--bad); }
+.lineup .fix { grid-area: fix; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lineup .fix b.bad { color: var(--bad); font-weight: 600; font-size: 14px; }
+.lineup .fixrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; }
+.lineup .fixrow .muted { font-size: 13px; }
+.lineup .fixrow .btn { margin-left: auto; }
+
+.season ul.plain.rows li { display: flex; align-items: center; gap: 8px 12px; }
+.season ul.plain.rows .grow { flex: 1; min-width: 0; }
+.season .callout ul.plain li { border-color: rgba(255, 122, 26, 0.18); }
+.season .callout ul.plain li:last-child { border-bottom: 0; }
+
+/* Onboarding: three tappable step cards */
+.stepcards { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 10px; }
+.stepcards a { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 14px; padding: 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-l); color: var(--text);
+  transition: transform 160ms var(--ease-out), border-color 160ms, background-color 160ms; }
+.stepcards a:hover { text-decoration: none; }
+.stepcards a:active { transform: scale(0.985); }
+.stepcards .n { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 122, 26, 0.14); color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; }
+.stepcards .body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stepcards .body b { font-size: 16px; }
+.stepcards .body > span { color: var(--muted); font-size: 14px; text-wrap: pretty; }
+.stepcards .go { color: var(--muted); font-size: 18px; transition: transform 160ms var(--ease-out), color 160ms; }
+.stepcards li:first-child a { border-color: rgba(255, 122, 26, 0.5); }
+@media (hover: hover) and (pointer: fine) {
+  .stepcards a:hover { border-color: var(--line2); background: var(--panel2); }
+  .stepcards li:first-child a:hover { border-color: var(--accent); }
+  .stepcards a:hover .go { color: var(--accent); transform: translateX(3px); }
+}
+
+/* Shared empty state */
+.season .emptystate { margin-top: 20px; padding: 28px 24px; border: 1px dashed var(--line2); border-radius: var(--r-l); text-align: center; }
+.season .emptystate b { font-size: 16px; }
+.season .emptystate p { color: var(--muted); margin: 6px auto 16px; max-width: 460px; text-wrap: pretty; }
+.season .emptystate .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.season a.btn { display: inline-block; }
+.season a.btn:hover { text-decoration: none; }
+
+/* Tables: the player column sticks while the numbers scroll sideways on phones */
+.season .scroll { border: 1px solid var(--line); border-radius: var(--r); }
+.season .t tbody tr:last-child td { border-bottom: 0; }
+.season .t .stick { position: sticky; left: 0; z-index: 1; background: var(--bg); min-width: 190px; }
+.season .t th.stick { z-index: 2; }
+.season .t tr:hover td.stick { background: color-mix(in srgb, #fff 2%, var(--bg)); }
+.season .t td.actions { padding-right: 12px; }
+.season .t th:first-child, .season .t td:first-child { padding-left: 12px; }
+
+/* My team */
+.rostercount { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; }
+.rostercount b { color: var(--text); }
+.rostercount.warn { border-color: rgba(245, 158, 11, 0.5); color: var(--warn); }
+.teampage .rk { display: flex; align-items: baseline; }
+.teampage .rank { flex: none; width: 22px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.teampage .roster .tag { margin-left: 0; }
+.teampage .roster td .muted { font-size: 13px; }
+.teampage .banner { margin-top: 16px; }
+
+/* Search box: magnifier inside the field, roomier list */
+.teampage .search { max-width: 460px; margin: 20px 0 0; }
+.teampage .search input { padding: 10px 12px 10px 36px; font-size: 15px;
+  background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b95a9' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center; }
+.teampage .search ul { box-shadow: var(--shadow-pop); transform-origin: top center; animation: season-drop 140ms var(--ease-out); }
+.search button.on { background: var(--panel3); }
+.search li.none { padding: 8px 10px; color: var(--muted); font-size: 14px; }
+
+.dropcards { list-style: none; padding: 0; margin: 12px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.dropcards li { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+.dropcards .why { margin: 0; flex: 1; text-wrap: pretty; }
+.dropcards .btn { margin-top: 4px; }
+
+/* Waivers */
+.dropnote { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px 12px; margin-top: 20px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+.dropnote .lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.dropnote p { grid-column: 1 / -1; margin: 2px 0 0; color: var(--muted); font-size: 14px; text-wrap: pretty; }
+.dropnote .tag { margin-left: 0; }
+.waiverpage .filters { margin: 20px 0 8px; gap: 10px 20px; align-items: flex-end; }
+.fgroup { display: flex; flex-direction: column; gap: 6px; }
+.flabel { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.wire tr.upgrade td { background: rgba(34, 197, 94, 0.06); }
+.wire tr.upgrade td.stick { background: color-mix(in srgb, var(--good) 6%, var(--bg)); box-shadow: inset 3px 0 0 var(--good); }
+.wire tr.upgrade:hover td.stick { background: color-mix(in srgb, var(--good) 9%, var(--bg)); }
+.wire td.stick .tag { vertical-align: 1px; }
+
+@keyframes season-drop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+
+@media (max-width: 760px) {
+  /* A hairline marks where the numbers slide under the frozen player column */
+  .season .t .stick { min-width: 150px; max-width: 52vw; box-shadow: inset -1px 0 0 var(--line); }
+  .wire tr.upgrade td.stick { box-shadow: inset 3px 0 0 var(--good), inset -1px 0 0 var(--line); }
+  .season .dropnote { grid-template-columns: 1fr; }
+  .waiverpage .seg button { padding: 8px 10px; }
+  .season .btn.sm { min-height: 36px; }
+}
+@media (max-width: 560px) {
+  .lineup li { grid-template-columns: 46px minmax(0, 1fr) auto; grid-template-areas: 'slot who val' 'slot game val'; padding: 10px 12px; gap: 2px 10px; }
+  .lineup li.empty { grid-template-areas: 'slot fix fix'; }
+  .lineup .game { white-space: normal; }
+  .slotchip { min-width: 36px; }
+  .lineup .fixrow .btn { margin-left: 0; }
+  .stepcards a { grid-template-columns: 32px 1fr; padding: 14px; }
+  .stepcards .go { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teampage .search ul { animation: none; }
+  .stepcards a, .stepcards .go { transition: border-color 160ms, background-color 160ms, color 160ms; }
+  .stepcards a:active, .stepcards a:hover .go { transform: none; }
+}
