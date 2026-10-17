@@ -46,7 +46,7 @@ export default function League({ ctx }) {
                 <label key={k}>{WEIGHT_LABELS[k]}<input type="number" step="0.5" value={s.weights[k] ?? 0} onChange={(e) => set('weights', { ...s.weights, [k]: +e.target.value })} /></label>
               ))}
             </div>
-            <small>Defaults match ESPN points leagues.</small>
+            <small>Defaults match Grace One Charlotte FBL: ESPN points scoring, except a made free throw nets +1 and a miss −1.</small>
           </label>
         )}
 

@@ -33,7 +33,8 @@ export default function App() {
   const tab = useHash()
   const pdata = useFetch('/api/players')
   const ndata = useFetch('/api/news')
-  const [settings, setSettings] = useLocal('cs.settings', DEFAULT_SETTINGS)
+  // v2: defaults became the real league; a new key drops settings saved under the old generic defaults
+  const [settings, setSettings] = useLocal('cs.settings.v2', DEFAULT_SETTINGS)
   const [mine, setMine] = useLocal('cs.mine', [])
   const [taken, setTaken] = useLocal('cs.taken', [])
   const [openId, setOpenId] = useState(null)

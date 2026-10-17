@@ -16,14 +16,15 @@ export const CATS = [
 // ESPN's default points-league scoring
 export const DEFAULT_WEIGHTS = { pts: 1, tpm: 1, fgm: 2, fga: -1, ftm: 1, fta: -1, reb: 1, ast: 2, stl: 4, blk: 4, to: -2 }
 
+// Grace One Charlotte FBL (ESPN league 2028559007): 10-team H2H points
 export const DEFAULT_SETTINGS = {
-  format: 'cats', // 'cats' (head-to-head categories) or 'points'
-  teams: 12,
+  format: 'points', // 'cats' (head-to-head categories) or 'points'
+  teams: 10,
   rosterSize: 13,
   slots: 'PG,SG,SF,PF,C,G,F,UT,UT,UT',
   draftSlot: 1,
   punt: [], // category keys to ignore
-  weights: DEFAULT_WEIGHTS,
+  weights: { ...DEFAULT_WEIGHTS, ftm: 2 }, // league scores +1 per made FT, -1 per miss; same as FTM 2, FTA -1
   ownCutoff: 60, // hide players rostered in more than this % of ESPN leagues from waivers
 }
 
