@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useFetch, useLocal } from './lib/store.js'
 import { computeValues, DEFAULT_SETTINGS, normName, tagNews } from './lib/model.js'
-import { PlayerDrawer } from './components.jsx'
+import { Toaster, toast } from 'sonner'
+import { PlayerDrawer, PlayerFinder } from './components.jsx'
 import Today from './pages/Today.jsx'
 import Draft from './pages/Draft.jsx'
 import Team from './pages/Team.jsx'
@@ -22,6 +23,20 @@ const TABS = [
   ['learn', 'Learn', Learn],
 ]
 
+const OWNER_MSG = { mine: 'added to your team', taken: 'marked taken by another team', free: 'marked available' }
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+
+function Loading() {
+  return (
+    <div className="skel" aria-busy="true">
+      <i className="h" /><i className="l" />
+      <div className="row3"><i className="c" /><i className="c" /><i className="c" /></div>
+      <i /><i /><i className="l" /><i /><i className="l" />
+      <p>Loading 450+ players, schedules and news…</p>
+    </div>
+  )
+}
+
 const useHash = () => {
   const get = () => location.hash.slice(1) || 'today'
   const [h, setH] = useState(get)
@@ -38,6 +53,16 @@ export default function App() {
   const [mine, setMine] = useLocal('cs.mine', [])
   const [taken, setTaken] = useLocal('cs.taken', [])
   const [openId, setOpenId] = useState(null)
+  const [finding, setFinding] = useState(false)
+
+  // ⌘K / Ctrl+K anywhere, or "/" when not typing, opens the player finder.
+  useEffect(() => {
+    const k = (e) => {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable
+      if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !typing)) { e.preventDefault(); setFinding((f) => !f) }
+    }
+    addEventListener('keydown', k); return () => removeEventListener('keydown', k)
+  }, [])
 
   const s = { ...DEFAULT_SETTINGS, ...settings }
   const players = pdata.data?.players || []
@@ -72,6 +97,13 @@ export default function App() {
     setMine((m) => (who === 'mine' ? [...new Set([...m, id])] : m.filter((x) => x !== id)))
     setTaken((t) => (who === 'taken' ? [...new Set([...t, id])] : t.filter((x) => x !== id)))
   }
+  // setOwner plus a toast that can put the player back where he was. Draft keeps its own log, so it calls setOwner directly.
+  const moveTo = (id, who) => {
+    const prev = mineSet.has(id) ? 'mine' : takenSet.has(id) ? 'taken' : 'free'
+    if (prev === who) return
+    setOwner(id, who)
+    toast(`${byId.get(id)?.name ?? 'Player'} ${OWNER_MSG[who]}`, { action: { label: 'Undo', onClick: () => setOwner(id, prev) } })
+  }
 
   // After a full draft we know exactly who is taken; before that, guess from ESPN ownership.
   const exactTaken = taken.length >= (s.teams - 1) * s.rosterSize * 0.8
@@ -80,7 +112,7 @@ export default function App() {
   const ctx = {
     isFree, exactTaken,
     players, byId, teams, values, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
-    newsBy, injuryBy, status, setOwner, open: setOpenId, newsUpdated: ndata.data?.updated,
+    newsBy, injuryBy, status, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
     myPlayers: mine.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => (values.get(b.id)?.val ?? -99) - (values.get(a.id)?.val ?? -99)),
   }
   const Page = (TABS.find((t) => t[0] === tab) || TABS[0])[2]
@@ -92,11 +124,17 @@ export default function App() {
         <nav>
           {TABS.map(([k, label]) => <a key={k} href={`#${k}`} className={tab === k ? 'on' : ''}>{label}</a>)}
         </nav>
+        <button className="findbtn" onClick={() => setFinding(true)} aria-label="Find a player">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <span>Find a player</span><kbd>{IS_MAC ? '⌘K' : 'Ctrl K'}</kbd>
+        </button>
       </header>
       <main>
         {pdata.error && <div className="banner bad">Could not load player data: {pdata.error}. Refresh in a minute.</div>}
-        {!pdata.data && !pdata.error ? <div className="loading">Loading 450+ players, schedules and news…</div> : players.length > 0 && <Page ctx={ctx} />}
+        {!pdata.data && !pdata.error ? <Loading /> : players.length > 0 && <Page ctx={ctx} />}
       </main>
+      {players.length > 0 && <PlayerFinder ctx={ctx} open={finding} setOpen={setFinding} pages={TABS} />}
+      <Toaster theme="dark" position="bottom-center" offset={20} toastOptions={{ className: 'toast' }} />
       {openId && byId.get(openId) && <PlayerDrawer ctx={ctx} p={byId.get(openId)} onClose={() => setOpenId(null)} />}
       <footer>Data: ESPN fantasy projections and stats, ESPN injury report, RotoWire and Google News. Updated {pdata.data ? new Date(pdata.data.updated).toLocaleTimeString() : '…'}.</footer>
     </div>

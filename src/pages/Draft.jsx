@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react'
 import { draftSuggestions, likelyGone, positionOutlook, positionRun, roundTip, snakePicks } from '../lib/model.js'
 import { PlayerName, ValueTip, ZCell, catHeaders, fmt } from '../components.jsx'
 import { useLocal } from '../lib/store.js'
+import './draft.css'
 
 const POS = ['All', 'PG', 'SG', 'SF', 'PF', 'C']
 const LEVEL = { now: ['bad', 'Take now'], soon: ['warn', 'Take soon'], wait: ['info', 'Can wait'], covered: ['good', 'Have enough'] }

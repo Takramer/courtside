@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Command } from 'cmdk'
 import { CATS, etToday, gamesBetween, tagNews, weekBounds } from './lib/model.js'
 
 export const fmt = (x, d = 1) => (x == null || Number.isNaN(x) ? '–' : x.toFixed(d))
@@ -152,5 +153,48 @@ export function PlayerDrawer({ ctx, p, onClose }) {
         {p.outlook && <><h3>Season outlook (ESPN)</h3><p className="outlook">{p.outlook}</p></>}
       </aside>
     </div>
+  )
+}
+
+// ⌘K / "/" finder: jump to any player's panel or any page. Filters itself so 450 players stay fast.
+export function PlayerFinder({ ctx, open, setOpen, pages }) {
+  const [q, setQ] = useState('')
+  useEffect(() => { if (!open) setQ('') }, [open])
+  const term = q.trim().toLowerCase()
+  const val = (p) => ctx.values.get(p.id)?.val ?? -99
+  const hits = term
+    ? ctx.players.filter((p) => p.name.toLowerCase().includes(term)).sort((a, b) => val(b) - val(a)).slice(0, 30)
+    : ctx.myPlayers.slice(0, 13)
+  const pageHits = pages.filter(([, label]) => term && label.toLowerCase().includes(term))
+  const go = (fn) => { setOpen(false); fn() }
+  return (
+    <Command.Dialog open={open} onOpenChange={setOpen} label="Find a player or page" shouldFilter={false} loop
+      overlayClassName="cmdk-scrim" contentClassName="cmdk">
+      <Command.Input value={q} onValueChange={setQ} placeholder="Find a player or page" />
+      <Command.List>
+        <Command.Empty>{term ? 'No player by that name.' : 'Type a player name.'}</Command.Empty>
+        {pageHits.length > 0 && (
+          <Command.Group heading="Pages">
+            {pageHits.map(([k, label]) => <Command.Item key={k} value={`page-${k}`} onSelect={() => go(() => { location.hash = k })}><span className="grow"><b>{label}</b></span><small>page</small></Command.Item>)}
+          </Command.Group>
+        )}
+        {hits.length > 0 && (
+          <Command.Group heading={term ? 'Players' : 'Your team'}>
+            {hits.map((p) => {
+              const owner = ctx.mineSet.has(p.id) ? 'mine' : ctx.takenSet.has(p.id) ? 'taken' : null
+              return (
+                <Command.Item key={p.id} value={String(p.id)} onSelect={() => go(() => ctx.open(p.id))}>
+                  <span className="grow"><b>{p.name}</b><small>{ctx.teams[p.team]?.abbrev || 'FA'} · {p.pos.join('/')}</small></span>
+                  {owner && <span className={`own ${owner}`}>{owner === 'mine' ? 'yours' : 'taken'}</span>}
+                  <StatusBadge ctx={ctx} p={p} />
+                  <span className="num muted">{fmt(ctx.values.get(p.id)?.val)}</span>
+                </Command.Item>
+              )
+            })}
+          </Command.Group>
+        )}
+      </Command.List>
+      <div className="foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+    </Command.Dialog>
   )
 }

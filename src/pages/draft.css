@@ -1,0 +1,33 @@
+/* Draft: position priority */
+.pos5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 12px; }
+.poscard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.poscard b { font-size: 18px; }
+.poscard.now { border-color: rgba(239, 68, 68, 0.6); }
+.poscard.soon { border-color: rgba(245, 158, 11, 0.5); }
+@media (max-width: 760px) { .pos5 { grid-template-columns: repeat(2, 1fr); } }
+.filters input:not([type]) { min-width: 240px; }
+
+/* Draft: sticky clock bar. The app header stops sticking on this page so the bar can own the top edge. */
+.app:has(.clockbar) .top { position: static; }
+.clockbar { position: sticky; top: 0; z-index: 9; display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-top: 20px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 0 0 14px 14px; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45); }
+.clockbar.on { background: linear-gradient(rgba(255, 122, 26, 0.16), rgba(255, 122, 26, 0.16)), var(--panel); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 10px 30px rgba(255, 122, 26, 0.25); }
+.clock { display: flex; flex-direction: column; min-width: 210px; }
+.clock b { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.clock span { color: var(--muted); font-size: 13px; }
+.clockbar.on .clock b { color: var(--accent); }
+.find { flex: 1; min-width: 240px; position: relative; }
+.find input { width: 100%; font-size: 16px; }
+/* What Enter will mark, shown under the box like an autocomplete row so the bar keeps its height. */
+.find small { position: absolute; top: calc(100% + 6px); left: 0; padding: 6px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; color: var(--text); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4); }
+.find small:empty { display: none; }
+.find small b { color: var(--text); }
+.clockbar .btn.ghost { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leaguefacts { align-self: center; padding: 0 8px; font-size: 13px; }
+@media (max-width: 760px) {
+  .clockbar { margin-left: -14px; margin-right: -14px; border-radius: 0; border-width: 0 0 1px; }
+  .clockbar.on { border-width: 1px 0; }
+  .clock { flex: 1; min-width: 0; }
+  .clockbar .btn { min-height: 44px; order: 1; flex-basis: 100%; }
+  .clockbar .btn.ghost { order: 0; flex-basis: auto; max-width: 45%; }
+  .find { order: 2; flex-basis: 100%; }
+}
