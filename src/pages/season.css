@@ -10,15 +10,14 @@
 .season button.inline { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
 /* Stat cards that say what to do, tinted only when there is something to act on */
-.season .stat { gap: 2px; }
 .season .stat b { font-variant-numeric: tabular-nums; }
 .season .stat span { text-wrap: pretty; }
-.season .stat.warn { border-color: rgba(245, 158, 11, 0.5); background: linear-gradient(rgba(245, 158, 11, 0.07), rgba(245, 158, 11, 0.07)), var(--panel); }
+.season .stat.warn b { color: var(--warn); }
 .season .stat.warn b { color: var(--warn); }
 .season .stat.good b { color: var(--good); }
 
 /* Today: the lineup */
-.lineup { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); overflow: hidden; }
+.lineup { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line2); border-bottom: 1px solid var(--line); }
 .lineup li { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto 56px; grid-template-areas: 'slot who game val'; align-items: center; gap: 4px 14px; padding: 10px 14px; border-top: 1px solid var(--line); min-height: 52px; }
 .lineup li:first-child { border-top: 0; }
 .lineup .tip { grid-area: slot; border-bottom: 0; justify-self: start; }
@@ -26,9 +25,9 @@
 .lineup .game { grid-area: game; color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .lineup .game b { color: var(--text); font-weight: 600; }
 .lineup .val { grid-area: val; font-weight: 700; }
-.slotchip { display: inline-grid; place-items: center; min-width: 40px; height: 26px; padding: 0 6px; border-radius: 7px; background: var(--panel2); border: 1px solid var(--line2); font-size: 12px; font-weight: 800; letter-spacing: 0.03em; color: var(--text); }
-.lineup li.empty { grid-template-areas: 'slot fix fix fix'; background: rgba(239, 68, 68, 0.07); box-shadow: inset 3px 0 0 var(--bad); }
-.lineup li.empty .slotchip { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.5); color: var(--bad); }
+.slotchip { display: inline-grid; place-items: center; min-width: 40px; height: 26px; padding: 0 6px; border-radius: var(--r-s); background: var(--panel2); font-family: var(--cond); font-size: 15px; font-weight: 600; letter-spacing: 0.03em; color: var(--text); }
+.lineup li.empty { grid-template-areas: 'slot fix fix fix'; background: rgba(229, 72, 77, 0.07); box-shadow: inset 3px 0 0 var(--bad); }
+.lineup li.empty .slotchip { background: rgba(229, 72, 77, 0.15); color: var(--bad); }
 .lineup .fix { grid-area: fix; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .lineup .fix b.bad { color: var(--bad); font-weight: 600; font-size: 14px; }
 .lineup .fixrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; }
@@ -37,48 +36,45 @@
 
 .season ul.plain.rows li { display: flex; align-items: center; gap: 8px 12px; }
 .season ul.plain.rows .grow { flex: 1; min-width: 0; }
-.season .callout ul.plain li { border-color: rgba(255, 122, 26, 0.18); }
+.season .callout ul.plain li { border-color: rgba(243, 109, 33, 0.18); }
 .season .callout ul.plain li:last-child { border-bottom: 0; }
 
 /* Onboarding: three tappable step cards */
-.stepcards { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 10px; }
-.stepcards a { display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 14px; padding: 16px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-l); color: var(--text);
-  transition: transform 160ms var(--ease-out), border-color 160ms, background-color 160ms; }
+.stepcards { list-style: none; padding: 0; margin: var(--s6) 0 0; display: grid; }
+.stepcards a { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: var(--s4); padding: var(--s5) 0; border-top: 1px solid var(--line); color: var(--text);
+  transition: transform 160ms var(--ease-out), color 160ms; }
 .stepcards a:hover { text-decoration: none; }
 .stepcards a:active { transform: scale(0.985); }
-.stepcards .n { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 122, 26, 0.14); color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; }
+.stepcards .n { font-family: var(--cond); font-size: 40px; line-height: 1; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
 .stepcards .body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.stepcards .body b { font-size: 16px; }
+.stepcards .body b { font-family: var(--cond); font-size: 22px; font-weight: 600; }
 .stepcards .body > span { color: var(--muted); font-size: 14px; text-wrap: pretty; }
 .stepcards .go { color: var(--muted); font-size: 18px; transition: transform 160ms var(--ease-out), color 160ms; }
-.stepcards li:first-child a { border-color: rgba(255, 122, 26, 0.5); }
+.stepcards li:last-child a { border-bottom: 1px solid var(--line); }
 @media (hover: hover) and (pointer: fine) {
-  .stepcards a:hover { border-color: var(--line2); background: var(--panel2); }
-  .stepcards li:first-child a:hover { border-color: var(--accent); }
+  .stepcards a:hover .body b { color: var(--accent); }
   .stepcards a:hover .go { color: var(--accent); transform: translateX(3px); }
 }
 
 /* Shared empty state */
-.season .emptystate { margin-top: 20px; padding: 28px 24px; border: 1px dashed var(--line2); border-radius: var(--r-l); text-align: center; }
-.season .emptystate b { font-size: 16px; }
+.season .emptystate { margin-top: var(--s5); padding: var(--s6) var(--s5); background: var(--panel); border-radius: var(--r); text-align: center; }
+.season .emptystate b { font-family: var(--cond); font-size: 22px; font-weight: 600; }
 .season .emptystate p { color: var(--muted); margin: 6px auto 16px; max-width: 460px; text-wrap: pretty; }
 .season .emptystate .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .season a.btn { display: inline-block; }
 .season a.btn:hover { text-decoration: none; }
 
 /* Tables: the player column sticks while the numbers scroll sideways on phones */
-.season .scroll { border: 1px solid var(--line); border-radius: var(--r); }
 .season .t tbody tr:last-child td { border-bottom: 0; }
 .season .t .stick { position: sticky; left: 0; z-index: 1; background: var(--bg); min-width: 190px; }
 .season .t th.stick { z-index: 2; }
 .season .t tr:hover td.stick { background: color-mix(in srgb, #fff 2%, var(--bg)); }
 .season .t td.actions { padding-right: 12px; }
-.season .t th:first-child, .season .t td:first-child { padding-left: 12px; }
 
 /* My team */
-.rostercount { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; }
+.rostercount { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
 .rostercount b { color: var(--text); }
-.rostercount.warn { border-color: rgba(245, 158, 11, 0.5); color: var(--warn); }
+.rostercount.warn { color: var(--warn); }
 .teampage .rk { display: flex; align-items: baseline; }
 .teampage .rank { flex: none; width: 22px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .teampage .roster .tag { margin-left: 0; }
@@ -94,19 +90,19 @@
 .search li.none { padding: 8px 10px; color: var(--muted); font-size: 14px; }
 
 .dropcards { list-style: none; padding: 0; margin: 12px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-.dropcards li { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+.dropcards li { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: var(--s4); background: var(--panel); border-top: 2px solid var(--line2); border-radius: 0 0 var(--r) var(--r); }
 .dropcards .why { margin: 0; flex: 1; text-wrap: pretty; }
 .dropcards .btn { margin-top: 4px; }
 
 /* Waivers */
-.dropnote { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px 12px; margin-top: 20px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
-.dropnote .lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.dropnote { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px var(--s3); margin-top: var(--s5); padding: var(--s4) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.dropnote .lbl { font-family: var(--cond); font-size: 15px; font-weight: 600; color: var(--muted); }
 .dropnote p { grid-column: 1 / -1; margin: 2px 0 0; color: var(--muted); font-size: 14px; text-wrap: pretty; }
 .dropnote .tag { margin-left: 0; }
 .waiverpage .filters { margin: 20px 0 8px; gap: 10px 20px; align-items: flex-end; }
 .fgroup { display: flex; flex-direction: column; gap: 6px; }
-.flabel { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.wire tr.upgrade td { background: rgba(34, 197, 94, 0.06); }
+.flabel { font-size: 14px; font-weight: 500; color: var(--muted); }
+.wire tr.upgrade td { background: rgba(60, 191, 110, 0.06); }
 .wire tr.upgrade td.stick { background: color-mix(in srgb, var(--good) 6%, var(--bg)); box-shadow: inset 3px 0 0 var(--good); }
 .wire tr.upgrade:hover td.stick { background: color-mix(in srgb, var(--good) 9%, var(--bg)); }
 .wire td.stick .tag { vertical-align: 1px; }

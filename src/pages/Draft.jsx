@@ -88,9 +88,9 @@ export default function Draft({ ctx }) {
           <h1>Draft room</h1>
           <p className="lead">Keep this open next to ESPN. When another team picks, type the name in the box at the top and press Enter. When you pick, press <b>Draft</b> on that player. The page then tells you who to take next.</p>
         </div>
-        <div className="seg">
-          <span className="muted leaguefacts">{settings.teams} teams · slot {settings.draftSlot} · <a href="#league">change</a></span>
-          <button onClick={reset}>Reset draft</button>
+        <div className="headmeta">
+          <span>{settings.teams} teams, you pick from slot {settings.draftSlot}. <a href="#league">Change</a></span>
+          <button className="btn ghost sm" onClick={reset}>Reset draft</button>
         </div>
       </div>
 

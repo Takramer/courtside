@@ -1,28 +1,28 @@
 /* Draft: position priority */
-.pos5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 12px; }
-.poscard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
-.poscard b { font-size: 18px; }
-.poscard.now { border-color: rgba(239, 68, 68, 0.6); }
-.poscard.soon { border-color: rgba(245, 158, 11, 0.5); }
+.pos5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s5); margin-top: 12px; }
+.poscard { padding: var(--s3) 0; border-top: 2px solid var(--line2); display: flex; flex-direction: column; gap: 6px; }
+.poscard b { font-family: var(--cond); font-size: 22px; font-weight: 600; }
+.poscard.now { border-top-color: var(--bad); }
+.poscard.soon { border-top-color: var(--warn); }
 @media (max-width: 760px) { .pos5 { grid-template-columns: repeat(2, 1fr); } }
 .filters input:not([type]) { min-width: 240px; }
 
 /* Draft: sticky clock bar. The app header stops sticking on this page so the bar can own the top edge. */
 .app:has(.clockbar) .top { position: static; }
-.clockbar { position: sticky; top: 0; z-index: 9; display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-top: 20px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 0 0 14px 14px; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45); }
-.clockbar.on { background: linear-gradient(rgba(255, 122, 26, 0.16), rgba(255, 122, 26, 0.16)), var(--panel); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 10px 30px rgba(255, 122, 26, 0.25); }
+.clockbar { position: sticky; top: 0; z-index: 9; display: flex; align-items: center; gap: var(--s3) var(--s4); flex-wrap: wrap; margin-top: var(--s5); padding: var(--s3) var(--s4); background: var(--panel); border-top: 2px solid var(--line2); border-radius: 0 0 var(--r) var(--r); box-shadow: 0 14px 24px -14px rgba(0, 0, 0, 0.7); }
+.clockbar.on { background: #1e1611; border-top-color: var(--accent); }
 .clock { display: flex; flex-direction: column; min-width: 210px; }
-.clock b { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.clock b { font-family: var(--cond); font-size: 22px; font-weight: 600; }
 .clock span { color: var(--muted); font-size: 13px; }
 .clockbar.on .clock b { color: var(--accent); }
 .find { flex: 1; min-width: 240px; position: relative; }
 .find input { width: 100%; font-size: 16px; }
 /* What Enter will mark, shown under the box like an autocomplete row so the bar keeps its height. */
-.find small { position: absolute; top: calc(100% + 6px); left: 0; padding: 6px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; color: var(--text); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4); }
+.find small { position: absolute; top: calc(100% + 6px); left: 0; padding: 6px 10px; background: var(--panel2); border: 1px solid var(--line2); border-radius: var(--r-s); font-size: 14px; color: var(--text); box-shadow: var(--shadow-pop); }
 .find small:empty { display: none; }
 .find small b { color: var(--text); }
 .clockbar .btn.ghost { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.leaguefacts { align-self: center; padding: 0 8px; font-size: 13px; }
+.leaguefacts { align-self: center; font-size: 14px; }
 @media (max-width: 760px) {
   .clockbar { margin-left: -14px; margin-right: -14px; border-radius: 0; border-width: 0 0 1px; }
   .clockbar.on { border-width: 1px 0; }
@@ -37,14 +37,14 @@
 /* Clock bar: a countdown box so "how long until I pick" reads at a glance. */
 .draftpage .clock { flex-direction: row; align-items: center; gap: 12px; }
 .draftpage .clocktext { display: flex; flex-direction: column; min-width: 0; color: var(--text); }
-.draftpage .clocktext b { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.draftpage .clocktext b { font-family: var(--cond); font-size: 22px; font-weight: 600; line-height: 1.15; }
 .draftpage .clocktext span { color: var(--muted); font-size: 13px; }
 .draftpage .clockbar.on .clocktext b { color: var(--accent); }
-.draftpage .count { color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 68px; padding: 6px 10px; border-radius: var(--r-s); background: var(--panel2); border: 1px solid var(--line2); }
-.draftpage .count b { font-size: 24px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.draftpage .count small { color: var(--muted); font-size: 11px; white-space: nowrap; margin-top: 3px; }
-.draftpage .clockbar.soon { border-color: rgba(245, 158, 11, 0.55); }
-.draftpage .clockbar.soon .count { border-color: rgba(245, 158, 11, 0.55); background: rgba(245, 158, 11, 0.1); }
+.draftpage .count { color: var(--text); display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 64px; padding: 4px 10px; border-radius: var(--r-s); background: var(--bg); }
+.draftpage .count b { font-family: var(--cond); font-size: 32px; line-height: 1; font-weight: 600; font-variant-numeric: tabular-nums; }
+.draftpage .count small { color: var(--muted); font-size: 12px; white-space: nowrap; margin-top: 2px; }
+.draftpage .clockbar.soon { border-top-color: var(--warn); }
+.draftpage .clockbar.soon .count { background: rgba(232, 163, 61, 0.12); }
 .draftpage .clockbar.soon .count b, .draftpage .clockbar.soon .clocktext b { color: var(--warn); }
 .draftpage .clockbar.on .count { background: var(--accent); border-color: var(--accent); }
 .draftpage .clockbar.on .count b, .draftpage .clockbar.on .count small { color: var(--accent-ink); }
@@ -53,16 +53,16 @@
 @keyframes draft-pop { from { transform: scale(0.9); opacity: 0.6; } }
 
 /* Suggestion cards: the top pick leads; options 2 and 3 step back. */
-.draftpage .pickcard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px; }
-.draftpage .pickcard.best { border-color: rgba(255, 122, 26, 0.65); background: linear-gradient(180deg, rgba(255, 122, 26, 0.09), transparent 70%), var(--panel); box-shadow: 0 0 0 1px rgba(255, 122, 26, 0.18), 0 12px 28px rgba(0, 0, 0, 0.35); }
+.draftpage .pickcard { background: var(--panel); border-top: 2px solid var(--line2); border-radius: 0 0 var(--r) var(--r); padding: var(--s4); display: flex; flex-direction: column; gap: 4px; }
+.draftpage .pickcard.best { border-top-color: var(--accent); }
 .draftpage .pickhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
-.draftpage .pickrank { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.draftpage .pickrank { font-family: var(--cond); font-size: 15px; font-weight: 600; color: var(--muted); }
 .draftpage .pickcard.best .pickrank { color: var(--accent); }
 .draftpage .pickval { font-size: 12px; color: var(--muted); white-space: nowrap; }
-.draftpage .pickval b { font-size: 20px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.draftpage .pickcard .pname { font-size: 18px; }
+.draftpage .pickval b { font-family: var(--cond); font-size: 26px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.draftpage .pickcard .pname { font-size: 19px; }
 .draftpage .pickcard.best .pname button.link { font-weight: 700; }
-.draftpage .pickcard ul { margin: 6px 0 10px; padding-left: 18px; color: var(--muted); font-size: 13px; flex: 1; }
+.draftpage .pickcard ul { margin: var(--s2) 0 var(--s3); padding-left: 18px; color: var(--muted); font-size: 14px; flex: 1; }
 .draftpage .pickcard li + li { margin-top: 2px; }
 @media (max-width: 760px) { .draftpage .suggest { grid-template-columns: 1fr; } }
 
@@ -71,15 +71,15 @@
 .draftpage .slotstrip { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .draftpage .slotstrip li { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 220px; padding: 5px 10px 5px 6px; border: 1px dashed var(--line2); border-radius: var(--r-s); font-size: 13px; color: var(--muted); }
 .draftpage .slotstrip li.filled { border-style: solid; border-color: var(--line2); background: var(--panel); color: var(--text); }
-.draftpage .slotstrip .slot { flex: none; min-width: 28px; padding: 1px 5px; border-radius: 5px; background: var(--panel2); font-size: 11px; font-weight: 700; text-align: center; color: var(--muted); }
-.draftpage .slotstrip li.filled .slot { background: rgba(255, 122, 26, 0.16); color: var(--accent); }
+.draftpage .slotstrip .slot { flex: none; min-width: 28px; padding: 0 5px; border-radius: 3px; background: var(--panel2); font-family: var(--cond); font-size: 13px; font-weight: 600; text-align: center; color: var(--muted); }
+.draftpage .slotstrip li.filled .slot { background: rgba(243, 109, 33, 0.16); color: var(--accent); }
 .draftpage .slotstrip button.link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 
 /* Board row actions: quiet until you point at a row, always full strength on touch and keyboard focus. */
-.draftpage .rowbtn { min-height: 28px; padding: 3px 10px; border-radius: 7px; border: 1px solid var(--line2); background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+.draftpage .rowbtn { min-height: 28px; padding: 0 10px; font-family: var(--cond); letter-spacing: 0.03em; text-transform: uppercase; border-radius: var(--r-s); border: 1px solid var(--line2); background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer;
   transition: transform 140ms var(--ease-out), opacity 120ms ease; }
 .draftpage .rowbtn + .rowbtn { margin-left: 6px; }
-.draftpage .rowbtn.mine { color: var(--accent); border-color: rgba(255, 122, 26, 0.45); }
+.draftpage .rowbtn.mine { color: var(--accent); border-color: rgba(243, 109, 33, 0.45); }
 .draftpage .rowbtn:active { transform: scale(0.96); }
 @media (hover: hover) and (pointer: fine) {
   .draftpage .t tbody .rowbtn { opacity: 0.45; }
@@ -88,8 +88,8 @@
   .draftpage .rowbtn.mine:hover { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 }
 /* Mine vs Taken rows: orange edge and tag for yours, grey and faded for other teams. */
-.draftpage .owntag { display: inline-block; margin-right: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; vertical-align: middle; }
-.draftpage .owntag.mine { color: var(--accent); background: rgba(255, 122, 26, 0.14); }
+.draftpage .owntag { display: inline-block; margin-right: var(--s2); padding: 1px 6px; border-radius: var(--r-s); font-family: var(--cond); font-size: 13px; font-weight: 600; vertical-align: middle; }
+.draftpage .owntag.mine { color: var(--accent); background: rgba(243, 109, 33, 0.14); }
 .draftpage .owntag.taken { color: var(--muted); background: var(--panel2); }
 .draftpage .t tr.own-mine td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .draftpage .t tr.own-taken td { opacity: 1; color: var(--muted); }
@@ -100,7 +100,7 @@
 @media (max-width: 760px) {
   .draftpage .t th:last-child, .draftpage .t td.actions { position: sticky; right: 0; background: var(--bg); box-shadow: -8px 0 12px -8px rgba(0, 0, 0, 0.8); }
   .draftpage .t th:last-child { z-index: 1; }
-  .draftpage .t tr.own-mine td.actions { background: linear-gradient(rgba(255, 122, 26, 0.08), rgba(255, 122, 26, 0.08)), var(--bg); }
+  .draftpage .t tr.own-mine td.actions { background: #1a1512; }
   .draftpage .rowbtn { min-height: 36px; padding: 4px 12px; }
   .draftpage .owntag { display: none; }
   .draftpage .clocktext b { font-size: 16px; }
