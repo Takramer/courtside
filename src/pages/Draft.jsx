@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { draftSuggestions, likelyGone, positionOutlook, positionRun, roundTip, snakePicks } from '../lib/model.js'
 import { PlayerName, ValueTip, ZCell, catHeaders, fmt } from '../components.jsx'
 import { useLocal } from '../lib/store.js'
 
 const POS = ['All', 'PG', 'SG', 'SF', 'PF', 'C']
-const LEVEL = { now: ['bad', 'Take now'], soon: ['warn', 'Soon'], wait: ['info', 'Can wait'], covered: ['good', 'Covered'] }
+const LEVEL = { now: ['bad', 'Take now'], soon: ['warn', 'Take soon'], wait: ['info', 'Can wait'], covered: ['good', 'Have enough'] }
 
 export default function Draft({ ctx }) {
   const { settings, values, mineSet, takenSet, players } = ctx
@@ -12,6 +12,7 @@ export default function Draft({ ctx }) {
   const [q, setQ] = useState('')
   const [pos, setPos] = useState('All')
   const [showTaken, setShowTaken] = useState(false)
+  const searchRef = useRef(null)
 
   const picks = snakePicks(settings.teams, settings.draftSlot, settings.rosterSize)
   const current = ctx.mine.length + ctx.taken.length + 1
@@ -20,8 +21,11 @@ export default function Draft({ ctx }) {
   const onClock = current === nextPick
   const done = !nextPick
 
-  const pick = (id, who) => { ctx.setOwner(id, who); setLog((l) => [...l, id]) }
-  const undo = () => { const id = log[log.length - 1]; if (id == null) return; ctx.setOwner(id, 'free'); setLog((l) => l.slice(0, -1)) }
+  // Back to the search box after every mark, so the next pick is type + Enter. Skipped on touch screens: it would pop the keyboard.
+  const refocus = () => { if (matchMedia('(pointer: fine)').matches) searchRef.current?.focus() }
+  const pick = (id, who) => { ctx.setOwner(id, who); setLog((l) => [...l, id]); setQ(''); refocus() }
+  const undo = () => { const id = log[log.length - 1]; if (id == null) return; ctx.setOwner(id, 'free'); setLog((l) => l.slice(0, -1)); refocus() }
+  const lastMarked = ctx.byId.get(log[log.length - 1])
   const reset = () => { if (confirm('Clear every pick, including your own team?')) { ctx.setMine([]); ctx.setTaken([]); setLog([]) } }
 
   const available = useMemo(() => players.filter((p) => !mineSet.has(p.id) && !takenSet.has(p.id)), [players, mineSet, takenSet])
@@ -41,42 +45,80 @@ export default function Draft({ ctx }) {
   const run = positionRun(theirs.slice(-6).map((id) => ctx.byId.get(id)).filter(Boolean))
 
   const onSearchKey = (e) => {
-    if (e.key !== 'Enter' || !q || !board[0] || mineSet.has(board[0].id) || takenSet.has(board[0].id)) return
-    pick(board[0].id, 'taken'); setQ('')
+    if (e.key === 'Escape') setQ('')
+    if (e.key !== 'Enter' || !match) return
+    pick(match.id, 'taken')
   }
 
   const board = players
     .filter((p) => showTaken || (!mineSet.has(p.id) && !takenSet.has(p.id)))
-    .filter((p) => pos === 'All' || p.pos.includes(pos))
+    .filter((p) => q || pos === 'All' || p.pos.includes(pos)) // a name search ignores the position filter
     .filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => (values.get(a.id)?.draftRank ?? 999) - (values.get(b.id)?.draftRank ?? 999))
     .slice(0, 250)
   const cats = catHeaders(settings)
+  const match = q && board[0] && !mineSet.has(board[0].id) && !takenSet.has(board[0].id) ? board[0] : null
 
   return (
     <div className="page">
       <div className="pagehead">
         <div>
           <h1>Draft room</h1>
-          <p className="lead">Keep this open during your draft. After every pick in your real draft, find that player here and press <b>Mine</b> or <b>Taken</b>. The top of the page then tells you who to take next.</p>
+          <p className="lead">Keep this open next to ESPN. When another team picks, type the name in the box at the top and press Enter. When you pick, press <b>Draft</b> on that player. The page then tells you who to take next.</p>
         </div>
         <div className="seg">
-          <button onClick={undo} disabled={!log.length}>Undo last</button>
+          <span className="muted leaguefacts">{settings.teams} teams · slot {settings.draftSlot} · <a href="#league">change</a></span>
           <button onClick={reset}>Reset draft</button>
         </div>
       </div>
 
-      <div className="cards3">
-        <div className="stat"><b>#{done ? '–' : current}</b><span>pick on the clock</span></div>
-        <div className={`stat ${onClock ? 'hot' : ''}`}><b>{done ? 'Done' : onClock ? 'YOU' : `#${nextPick}`}</b><span>{done ? 'your roster is full' : onClock ? 'you are picking now' : `your next pick (${picksUntilMe} picks away)`}</span></div>
-        <div className="stat"><b>{settings.teams} teams · slot {settings.draftSlot}</b><span><a href="#league">change in League setup</a></span></div>
+      {/* Sticky: clock status, the search used on every pick, and undo never scroll away. */}
+      <div className={`clockbar ${onClock ? 'on' : ''}`}>
+        <div className="clock" aria-live="polite">
+          <b>{done ? 'Draft done' : onClock ? 'You are on the clock' : `Pick #${current} · round ${round}`}</b>
+          <span>{done ? 'your roster is full' : onClock ? `pick #${current} · round ${round}` : `your pick is #${nextPick}, ${picksUntilMe} ${picksUntilMe === 1 ? 'pick' : 'picks'} away`}</span>
+        </div>
+        {onClock && suggestions[0] && <button className="btn" onClick={() => pick(suggestions[0].p.id, 'mine')}>Draft {suggestions[0].p.name}</button>}
+        <div className="find">
+          <input ref={searchRef} aria-label="Search player. Enter marks the top match Taken" placeholder="Type a name, Enter marks Taken" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
+          <small aria-live="polite">{!q ? '' : match ? <>Enter marks <b>{match.name}</b> Taken{board.length > 1 ? ` · ${board.length - 1} more ${board.length === 2 ? 'match' : 'matches'}` : ''}</> : 'No player left with that name'}</small>
+        </div>
+        <button className="btn ghost" onClick={undo} disabled={!log.length} title={lastMarked?.name}>Undo{lastMarked ? ` ${lastMarked.name}` : ''}</button>
       </div>
+
+      {!done && (
+        <section>
+          <h2>{onClock ? 'Take one of these now' : `Likely still there at pick #${nextPick}`}</h2>
+          {run && <div className="banner warn">Teams are taking {run.pos}s: {run.n} of the last {run.of} picks. If you need one, take one soon.</div>}
+          <div className="suggest">
+            {suggestions.map((s, i) => (
+              <div className="card" key={s.p.id}>
+                <div className="rankno">{i + 1}</div>
+                <PlayerName ctx={ctx} p={s.p} />
+                <div className="muted">Value {fmt(s.v.seasonVal)} · Usual pick {s.p.adp ? Math.round(s.p.adp) : '–'}</div>
+                <ul>{(s.reasons.length ? s.reasons : ['Highest value still available']).map((r, j) => <li key={j}>{r}</li>)}</ul>
+                <button className="btn" onClick={() => pick(s.p.id, 'mine')}>Draft him</button>
+              </div>
+            ))}
+          </div>
+          {!onClock && gone.length > 0 && (
+            <p className="muted">Probably gone before your turn: {gone.slice(0, 9).map((p) => p.name).join(', ')}{gone.length > 9 ? ' and more' : ''}. The cards above leave them out and update as real picks come in.</p>
+          )}
+        </section>
+      )}
+
+      {sinceMine.length > 0 && (
+        <section>
+          <h3>Other teams' picks since yours</h3>
+          <p className="muted">{sinceMine.map((p) => `${p.name} (${p.pos.join('/')})`).join(' · ')}</p>
+        </section>
+      )}
+      {theirs.length === 0 && !done && <p className="muted">When another team picks, type the name in the search box and press Enter to mark him Taken.</p>}
 
       {!done && (
         <section>
           <h2>Round {round} of {settings.rosterSize}: the plan</h2>
           <p>{roundTip(round, settings.rosterSize, settings)}</p>
-          {run && <div className="banner warn">Run on {run.pos}: {run.n} of the last {run.of} picks were {run.pos}s. Other teams are grabbing them, so the good ones left will not last.</div>}
           <div className="pos5">
             {outlook.map((o) => (
               <div key={o.pos} className={`poscard ${o.level}`}>
@@ -88,37 +130,8 @@ export default function Draft({ ctx }) {
         </section>
       )}
 
-      {!done && (
-        <section>
-          <h2>{onClock ? 'Take one of these now' : `Likely still there at pick #${nextPick}`}</h2>
-          <div className="suggest">
-            {suggestions.map((s, i) => (
-              <div className="card" key={s.p.id}>
-                <div className="rankno">{i + 1}</div>
-                <PlayerName ctx={ctx} p={s.p} />
-                <div className="muted">Value {fmt(s.v.seasonVal)} · ADP {s.p.adp ? Math.round(s.p.adp) : '–'}</div>
-                <ul>{(s.reasons.length ? s.reasons : ['Best value left on the board']).map((r, j) => <li key={j}>{r}</li>)}</ul>
-                <button className="btn" onClick={() => pick(s.p.id, 'mine')}>Draft him (Mine)</button>
-              </div>
-            ))}
-          </div>
-          {!onClock && gone.length > 0 && (
-            <p className="muted">Likely gone before your turn ({picksUntilMe} picks): {gone.slice(0, 9).map((p) => p.name).join(', ')}{gone.length > 9 ? ' and more' : ''}. These cards skip them, so they update as the real picks come in.</p>
-          )}
-        </section>
-      )}
-
-      {sinceMine.length > 0 && (
-        <section>
-          <h3>Since your last pick</h3>
-          <p className="muted">{sinceMine.map((p) => `${p.name} (${p.pos.join('/')})`).join(' · ')}</p>
-        </section>
-      )}
-      {theirs.length === 0 && !done && <p className="muted">When another team picks, type the name in the search box and press Enter to mark him Taken.</p>}
-
       <section>
         <div className="filters">
-          <input placeholder="Search player, Enter = Taken" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} />
           <div className="seg">{POS.map((x) => <button key={x} className={pos === x ? 'on' : ''} onClick={() => setPos(x)}>{x}</button>)}</div>
           <label><input type="checkbox" checked={showTaken} onChange={(e) => setShowTaken(e.target.checked)} /> show drafted</label>
         </div>
@@ -126,7 +139,7 @@ export default function Draft({ ctx }) {
           <table className="t">
             <thead>
               <tr>
-                <th>#</th><th>Player</th><th className="num" title="Average draft position across ESPN drafts">ADP</th><th className="num"><ValueTip settings={settings} /></th>
+                <th>#</th><th>Player</th><th className="num" title="Where people usually draft him (average pick in ESPN drafts)">ADP</th><th className="num"><ValueTip settings={settings} /></th>
                 {settings.format === 'cats' ? cats.map((c) => <th key={c.k} className="num" title={c.name}>{c.label}</th>) : <th className="num">FPTS/G</th>}
                 <th />
               </tr>

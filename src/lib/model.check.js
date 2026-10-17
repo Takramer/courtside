@@ -45,6 +45,12 @@ const later = likelyGone(dp, 2)
 const out = positionOutlook({ available: dp, mine: [], values: dv, settings: pts, gone: [], goneLater: later })
 assert.equal(out.find((o) => o.pos === 'C').level, 'now')
 assert.equal(out.find((o) => o.pos === 'SF').level, 'wait')
+// Every position dropping (round 1): only the steepest drops read "take now", the rest "soon".
+const dp2 = [...dp, { id: 'sf3', pos: ['SF'], adp: 95, val: 17, inj: 'ACTIVE' }]
+const dv2 = new Map([...dv, ['sf3', { seasonVal: 17, z: {} }]])
+const early = positionOutlook({ available: dp2, mine: [], values: dv2, settings: pts, gone: [], goneLater: likelyGone(dp2, 3) })
+assert.equal(early.find((o) => o.pos === 'C').level, 'now')
+assert.equal(early.find((o) => o.pos === 'SF').level, 'soon')
 assert.equal(draftSuggestions({ available: dp, mine: [], values: dv, settings: pts, nextPick: 5, followingPick: 16, goneLater: later })[0].p.id, 'c1')
 // Not on the clock: players expected to go first drop out of the suggestions.
 assert.ok(!draftSuggestions({ available: dp, mine: [], values: dv, settings: pts, gone: [dp[0]] }).some((s) => s.p.id === 'sf1'))

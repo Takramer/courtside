@@ -167,7 +167,7 @@ export const likelyGone = (available, n) =>
 
 export const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 const unitOf = (settings) => (settings.format === 'points' ? 3 : 0.75) // roughly "a clear difference" in each scale
-const valUnit = (settings, x) => (settings.format === 'points' ? `${x.toFixed(1)} fantasy points a game` : `${x.toFixed(1)} value`)
+const valUnit = (settings, x) => (settings.format === 'points' ? `${x.toFixed(1)} fantasy points a game` : `${x.toFixed(1)} in value`)
 
 // Best value still on the board at each position, ignoring players in `skip`.
 function bestByPos(available, values, skip) {
@@ -185,15 +185,17 @@ export function positionOutlook({ available, mine, values, settings, gone, goneL
   const now = bestByPos(available, values, new Set(gone.map((p) => p.id)))
   const later = bestByPos(available, values, new Set(goneLater.map((p) => p.id)))
   const unit = unitOf(settings)
+  const drops = Object.fromEntries(POSITIONS.map((pos) => [pos, (now[pos] ?? 0) - (later[pos] ?? 0)]))
+  const top = Math.max(...Object.values(drops)) // early on every position drops; "now" marks only the steepest
   return POSITIONS.map((pos) => {
     const have = mine.filter((p) => p.pos.includes(pos)).length
-    const drop = (now[pos] ?? 0) - (later[pos] ?? 0)
-    const level = have >= 2 ? 'covered' : drop >= unit ? 'now' : drop >= unit / 2 ? 'soon' : 'wait'
+    const drop = drops[pos]
+    const level = have >= 2 ? 'covered' : drop >= unit && drop >= 0.6 * top ? 'now' : drop >= unit / 2 ? 'soon' : 'wait'
     const why = {
-      covered: `You have ${have}. Only take another if he is clearly the best player left.`,
-      now: `The best ${pos} likely left at your following pick is ${valUnit(settings, drop)} worse. Take one this turn.`,
-      soon: `Drops by ${valUnit(settings, drop)} by your following pick. Fine to wait one turn, not two.`,
-      wait: have ? 'Plenty of similar players will still be there.' : 'You need one, but similar players will still be there. No rush.',
+      covered: 'That is enough. Only take another if he is clearly the best player left.',
+      now: `Wait a turn and the best ${pos} left drops by ${valUnit(settings, drop)}. Take one with this pick.`,
+      soon: `Wait a turn and the best ${pos} left drops by ${valUnit(settings, drop)}. OK to wait one turn, not two.`,
+      wait: have ? 'Similar players will still be there next turn.' : 'You need one, but similar players will still be there next turn.',
     }[level]
     return { pos, have, drop, level, why }
   })
@@ -223,19 +225,19 @@ export function draftSuggestions({ available, mine, values, settings, nextPick, 
       const help = weak.reduce((s, k) => s + Math.max(0, v.z[k]), 0)
       score += 0.15 * help
       const helps = weak.filter((k) => v.z[k] > 0.5).map((k) => CATS.find((c) => c.k === k).label)
-      if (helps.length) reasons.push(`Helps your weak spots: ${helps.join(', ')}`)
+      if (helps.length) reasons.push(`Helps your weakest stats: ${helps.join(', ')}`)
     }
     const fills = p.pos.filter((x) => thinPos.includes(x))
     if (fills.length) { score += 0.2 * (settings.format === 'points' ? 3 : 1); reasons.push(`You have no ${fills.join('/')} yet`) }
     if (goneLater.length) {
       const gap = v.seasonVal - Math.max(0, ...p.pos.map((x) => bestLater[x] ?? 0))
       if (gap > 0) score += 0.5 * gap // half weight: the ADP forecast is a guess
-      if (gap >= unit) reasons.push(`Waiting costs you: the best ${p.pos.join('/')} likely left next turn is ${valUnit(settings, gap)} worse`)
+      if (gap >= unit) reasons.push(`Wait a turn and the best ${p.pos.join('/')} left drops by ${valUnit(settings, gap)}`)
     }
-    if (p.adp && followingPick && p.adp < followingPick) reasons.push(`Usually gone before your following pick (#${followingPick})`)
-    if (p.adp && nextPick && p.adp - nextPick > 12) reasons.push(`Usually drafted around #${Math.round(p.adp)}, so you could wait on him`)
-    if (p.adp && nextPick && nextPick - p.adp > 20) reasons.push(`Falling: normally gone by #${Math.round(p.adp)}`)
-    if (p.inj !== 'ACTIVE') reasons.push(`Injury status: ${p.inj.replace(/_/g, ' ').toLowerCase()}`)
+    if (p.adp && followingPick && p.adp < followingPick) reasons.push(`Usually gone if you wait a turn (pick #${followingPick})`)
+    if (p.adp && nextPick && p.adp - nextPick > 12) reasons.push(`Usually drafted around pick #${Math.round(p.adp)}, so you can wait on him`)
+    if (p.adp && nextPick && nextPick - p.adp > 20) reasons.push(`Usually taken by pick #${Math.round(p.adp)}, so he is a bargain here`)
+    if (p.inj !== 'ACTIVE') reasons.push(`Injury report: ${p.inj.replace(/_/g, ' ').toLowerCase()}. Check his news first`)
     return { p, v, score, reasons }
   }).filter(Boolean).sort((a, b) => b.score - a.score)
 }
@@ -251,10 +253,10 @@ export function positionRun(recent) {
 
 // Plain-English plan for the round I am picking in.
 export function roundTip(round, rounds, settings) {
-  if (round <= 2) return 'Take the best player on the board, whatever his position. Stars play big minutes every night and you cannot find them later.'
-  if (round <= 6) return 'Still mostly best player available. If a position below says "Take now", lean that way when two players are close.'
-  if (round <= rounds - 3) return 'Fill empty starting spots now. An empty slot scores zero on game nights, so a solid starter beats a slightly better bench player.'
-  return `Last rounds: bench depth. Pick players whose role may grow (young starters, backups behind injured starters).${settings.format === 'points' ? ' In points leagues, minutes matter most: a 30-minute role player beats a talented 18-minute backup.' : ''}`
+  if (round <= 2) return 'Take the best player left, any position. Stars play big minutes every night, and you cannot find them later.'
+  if (round <= 6) return 'Still take the best player left. If two are close, pick the one whose position below says "Take now".'
+  if (round <= rounds - 3) return 'Fill empty starting spots. An empty lineup spot scores zero, so a solid starter beats a slightly better bench player.'
+  return `Last rounds: bench players. Pick ones whose role may grow (young starters, backups to injured starters).${settings.format === 'points' ? ' Minutes matter most in points leagues: a player who gets 30 minutes a night beats a better backup who gets 18.' : ''}`
 }
 
 // ---------- trade ----------
