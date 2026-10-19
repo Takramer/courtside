@@ -132,3 +132,14 @@
   .stepcards a, .stepcards .go { transition: border-color 160ms, background-color 160ms, color 160ms; }
   .stepcards a:active, .stepcards a:hover .go { transform: none; }
 }
+
+/* ---------- Starting lineup on My team ---------- */
+.teampage .lineupnow { margin: var(--s4) 0 var(--s5); }
+.teampage .lineupnow h3 { margin-top: 0; }
+.teampage .slotstrip { list-style: none; margin: 0 0 var(--s2); padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.teampage .slotstrip li { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 220px; padding: 5px 10px 5px 6px; border: 1px dashed var(--line2); border-radius: var(--r-s); font-size: 13px; color: var(--muted); }
+.teampage .slotstrip li.filled { border-style: solid; background: var(--panel); color: var(--text); }
+.teampage .slotstrip .slot { flex: none; min-width: 28px; padding: 0 5px; border-radius: 3px; background: var(--panel2); font-family: var(--cond); font-size: 13px; font-weight: 600; text-align: center; color: var(--muted); }
+.teampage .slotstrip li.filled .slot { background: rgba(243, 109, 33, 0.16); color: var(--accent); }
+.teampage .slotstrip button.link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.teampage .benchline { display: block; margin-top: 4px; }

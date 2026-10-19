@@ -12,6 +12,9 @@ assert.equal(benched.length, 0)
 assert.equal(bestLineup([mk(1, ['C']), mk(2, ['C'])], ['C', 'UT']).benched.length, 0)
 // Two centers, one C slot, no UT: the lower one (later in the list) sits.
 assert.equal(bestLineup([mk(1, ['C']), mk(2, ['C'])], ['C', 'PG']).benched[0].id, 2)
+// PF/C takes either a power forward or a centre, and nobody else
+assert.equal(bestLineup([mk(1, ['C']), mk(2, ['PF']), mk(3, ['PG'])], ['PF/C']).benched.map((x) => x.id).join(), '2,3')
+assert.equal(bestLineup([mk(1, ['SG'])], ['PF/C']).benched.length, 1)
 
 // Snake draft: slot 3 of 10 picks 3, 18, 23, 38.
 assert.deepEqual(snakePicks(10, 3, 4), [3, 18, 23, 38])

@@ -16,7 +16,7 @@ const GLOSSARY = [
   ['Hot / cold', 'Playing above or below his usual level over the last 15 days. Hot role players often cool off; cold stars usually recover.'],
 ]
 
-const TOC = [['learn-basics', 'The game'], ['learn-scoring', 'Categories vs. points'], ['learn-draft', 'The draft'], ['learn-routine', 'Season routine'], ['learn-news', 'Why news matters'], ['learn-words', 'Words you will see']]
+const TOC = [['learn-basics', 'The game'], ['learn-scoring', 'Categories vs. points'], ['learn-routine', 'Season routine'], ['learn-news', 'Why news matters'], ['learn-words', 'Words you will see']]
 
 export default function Learn() {
   const [active, setActive] = useState(TOC[0][0])
@@ -59,22 +59,10 @@ export default function Learn() {
         <p>Check which one your league uses and set it in <a href="#league">League setup</a>.</p>
       </section>
 
-      <section id="learn-draft">
-        <h2 tabIndex={-1}>The draft: how to use the Draft room</h2>
-        <ol className="steps">
-          <li>Before the draft, set teams, roster size and your draft position in League setup.</li>
-          <li>Open <a href="#draft">Draft</a> next to your league's draft screen.</li>
-          <li>Every time anyone picks, find that player and press <b>Mine</b> or <b>Taken</b>. Keep up; the suggestions only work if the board matches reality.</li>
-          <li>When it is your turn, take one of the three suggestions. They weigh value, your weak categories, empty positions and who will not be there next round.</li>
-          <li>Rules of thumb: early rounds, take the best player regardless of position. Avoid players with long injury histories in the first few rounds. Do not draft two centers in your first three picks unless they are elite.</li>
-          <li>If your league app auto-drafts for you, it will not use these rankings. Stay at the screen.</li>
-        </ol>
-      </section>
-
       <section id="learn-routine">
         <h2 tabIndex={-1}>Your season routine</h2>
         <ol className="steps">
-          <li><b>Every day, 10 minutes before the first game (usually 7pm Eastern):</b> open <a href="#today">Today</a>, copy the suggested lineup into your league app. Sit anyone ruled out. Check the news dot next to any name.</li>
+          <li><b>Every day, 10 minutes before the first game (usually 7pm Eastern):</b> open <a href="#team">My team</a>, set your ESPN lineup from it and sit anyone ruled out. Check the news dot next to any name.</li>
           <li><b>Monday:</b> open <a href="#waivers">Waivers</a> sorted by "Best this week". Players with 4 games that week beat better players with 2. Add one if he beats your weakest player.</li>
           <li><b>When injury news hits:</b> a starter going out for weeks often hands his minutes to a bench player. That bench player shows up under "Most added" or "Hottest". Grab him before others do.</li>
           <li><b>Any trade offer:</b> run it through <a href="#trade">Trade</a>. Never accept two worse players for one better one unless you have a strong waiver pickup ready for the open spot.</li>

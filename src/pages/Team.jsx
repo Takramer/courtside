@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { etToday, gamesBetween, weekBounds } from '../lib/model.js'
+import { bestLineup, etToday, gamesBetween, weekBounds } from '../lib/model.js'
 import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt } from '../components.jsx'
 import './season.css'
 
@@ -41,6 +41,9 @@ export default function Team({ ctx }) {
   const dropCands = [...new Set([...longOut, ...myPlayers.slice(-2)])]
   const swing = settings.format === 'points' ? 4 : 1.5
   const open = settings.rosterSize - myPlayers.length
+  // Who starts: best player first into the slots he fits, the rest to the bench.
+  const slots = settings.slots.split(',').map((x) => x.trim()).filter(Boolean)
+  const lineup = bestLineup(myPlayers, slots)
 
   return (
     <div className="page season teampage">
@@ -56,10 +59,23 @@ export default function Team({ ctx }) {
       {myPlayers.length === 0 ? (
         <div className="emptystate">
           <b>No players yet.</b>
-          <p>Draft them on the Draft page, or type each player you already own in the box above.</p>
-          <div className="row"><a className="btn" href="#draft">Go to Draft</a><button className="btn ghost" onClick={ctx.find}>Find a player</button></div>
+          <p>Type each player you own in the box above, one at a time.</p>
+          <div className="row"><button className="btn" onClick={ctx.find}>Find a player</button></div>
         </div>
       ) : <>
+        <section className="lineupnow" aria-label="Your starting lineup">
+          <h3>Start these {slots.length}</h3>
+          <ul className="slotstrip">
+            {lineup.starters.map(({ slot, player }, i) => (
+              <li key={i} className={player ? 'filled' : ''}>
+                <span className="slot">{slot}</span>
+                {player ? <button className="link" onClick={() => ctx.open(player.id)}>{player.name}</button> : <span>open</span>}
+              </li>
+            ))}
+          </ul>
+          <small>Set this in ESPN before the first game of the day. Sit anyone ruled out: an injured starter scores nothing, your bench player scores something. G = any guard, F = any forward, PF/C = power forward or centre, UT = anyone.</small>
+          {lineup.benched.length > 0 && <small className="benchline">Bench: {lineup.benched.map((p) => p.name).join(', ')}</small>}
+        </section>
         {open > 0 && <p className="banner warn">You have {open} open roster spot{open > 1 ? 's' : ''}. An empty spot can never score: add the best free agent from <a href="#waivers">Waivers</a>.</p>}
         <div className="scroll">
           <table className="t roster">

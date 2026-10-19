@@ -21,12 +21,20 @@ export const DEFAULT_SETTINGS = {
   format: 'points', // 'cats' (head-to-head categories) or 'points'
   teams: 10,
   rosterSize: 13,
-  slots: 'PG,SG,SF,PF,C,G,F,UT,UT,UT',
+  slots: 'PG,SG,SF,PF,C,G,F,PF/C,UT,UT',
   draftSlot: 1,
   punt: [], // category keys to ignore
   weights: { ...DEFAULT_WEIGHTS, ftm: 2 }, // league scores +1 per made FT, -1 per miss; same as FTM 2, FTA -1
   ownCutoff: 60, // hide players rostered in more than this % of ESPN leagues from waivers
 }
+
+// The team drafted on 2026-10-18. Loaded once, on a first visit with an empty roster; after that the app's own
+// Add and Drop are the record, so editing this list will not overwrite a roster you have already changed.
+export const DEFAULT_ROSTER = [
+  'Jamal Murray', 'Austin Reaves', 'Franz Wagner', 'Jayson Tatum', 'Anthony Davis',
+  'Norman Powell', 'Michael Porter Jr.', 'Miles Bridges', 'Paul George', 'Brandon Ingram',
+  'Zach Edey', 'Cedric Coward', 'Kyshawn George',
+]
 
 const KEYS = ['pts', 'reb', 'ast', 'stl', 'blk', 'tpm', 'to', 'fgm', 'fga', 'ftm', 'fta', 'min']
 
@@ -133,7 +141,7 @@ export const gameOn = (team, date) => (team?.games || []).find((g) => g.d === da
 
 // ---------- lineup ----------
 
-const SLOT_FITS = { PG: ['PG'], SG: ['SG'], SF: ['SF'], PF: ['PF'], C: ['C'], G: ['PG', 'SG'], F: ['SF', 'PF'], UT: null }
+const SLOT_FITS = { PG: ['PG'], SG: ['SG'], SF: ['SF'], PF: ['PF'], C: ['C'], G: ['PG', 'SG'], F: ['SF', 'PF'], 'PF/C': ['PF', 'C'], UT: null }
 export const fitsSlot = (pos, slot) => (SLOT_FITS[slot] === null ? true : pos.some((x) => SLOT_FITS[slot]?.includes(x)))
 
 // Best value first; each new player may bump earlier ones into other open slots they fit (augmenting paths),

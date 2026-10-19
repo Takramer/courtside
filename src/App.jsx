@@ -1,10 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useFetch, useLocal } from './lib/store.js'
-import { computeValues, DEFAULT_SETTINGS, normName, tagNews } from './lib/model.js'
+import { computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, normName, tagNews } from './lib/model.js'
 import { Toaster, toast } from 'sonner'
 import { PlayerDrawer, PlayerFinder } from './components.jsx'
-import Today from './pages/Today.jsx'
-import Draft from './pages/Draft.jsx'
 import Team from './pages/Team.jsx'
 import Waivers from './pages/Waivers.jsx'
 import Trade from './pages/Trade.jsx'
@@ -13,8 +11,6 @@ import League from './pages/League.jsx'
 import Learn from './pages/Learn.jsx'
 
 const TABS = [
-  ['today', 'Today', Today],
-  ['draft', 'Draft', Draft],
   ['team', 'My team', Team],
   ['waivers', 'Waivers', Waivers],
   ['trade', 'Trade', Trade],
@@ -38,7 +34,7 @@ function Loading() {
 }
 
 const useHash = () => {
-  const get = () => location.hash.slice(1) || 'today'
+  const get = () => location.hash.slice(1) || 'team'
   const [h, setH] = useState(get)
   useEffect(() => { const f = () => setH(get()); addEventListener('hashchange', f); return () => removeEventListener('hashchange', f) }, [])
   return h
@@ -48,10 +44,11 @@ export default function App() {
   const tab = useHash()
   const pdata = useFetch('/api/players')
   const ndata = useFetch('/api/news')
-  // v2: defaults became the real league; a new key drops settings saved under the old generic defaults
-  const [settings, setSettings] = useLocal('cs.settings.v2', DEFAULT_SETTINGS)
+  // v3: the real ESPN slots (PF/C, two UT) replace the old three-UT guess; a new key drops the settings saved under it
+  const [settings, setSettings] = useLocal('cs.settings.v3', DEFAULT_SETTINGS)
   const [mine, setMine] = useLocal('cs.mine', [])
   const [taken, setTaken] = useLocal('cs.taken', [])
+  const [rosterLoaded, setRosterLoaded] = useLocal('cs.roster.drafted', false)
   const [openId, setOpenId] = useState(null)
   const [finding, setFinding] = useState(false)
 
@@ -66,6 +63,15 @@ export default function App() {
 
   const s = { ...DEFAULT_SETTINGS, ...settings }
   const players = pdata.data?.players || []
+  // Load the team he drafted, once, replacing whatever this browser had marked before the draft.
+  // After that the app's own Add and Drop are the record: this never runs again.
+  useEffect(() => {
+    if (rosterLoaded || !players.length) return
+    const idByName = new Map(players.map((p) => [normName(p.name), p.id]))
+    const ids = DEFAULT_ROSTER.map((n) => idByName.get(normName(n))).filter(Boolean)
+    if (ids.length) setMine(ids)
+    setRosterLoaded(true)
+  }, [players, rosterLoaded])
   const teams = pdata.data?.teams || {}
   const values = useMemo(() => (players.length ? computeValues(players, s) : new Map()), [players, JSON.stringify(s)])
   const byId = useMemo(() => new Map(players.map((p) => [p.id, p])), [players])
@@ -120,7 +126,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="top">
-        <a className="brand" href="#today"><span className="ball" />Courtside</a>
+        <a className="brand" href="#team"><span className="ball" />Courtside</a>
         <nav>
           {TABS.map(([k, label]) => <a key={k} href={`#${k}`} className={tab === k ? 'on' : ''}>{label}</a>)}
         </nav>

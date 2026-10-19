@@ -76,18 +76,14 @@ export default function League({ ctx }) {
       </section>
 
       <section className="lsec" aria-labelledby="ls-size">
-        <h2 id="ls-size">League size and draft</h2>
+        <h2 id="ls-size">League size</h2>
         <label className="field row">
           <span className="lname">Number of teams</span>{num('teams', 4, 20)}
           <Affects>how many players count as worth owning, so who looks replaceable.</Affects>
         </label>
         <label className="field row">
           <span className="lname">Roster size <small>starters + bench, not injured-reserve spots</small></span>{num('rosterSize', 5, 20)}
-          <Affects>the number of draft rounds, and who looks replaceable.</Affects>
-        </label>
-        <label className="field row">
-          <span className="lname">Your draft position <small>1 = first pick</small></span>{num('draftSlot', 1, s.teams)}
-          <Affects>when your picks come up in the Draft room.</Affects>
+          <Affects>how many open spots you have, and who looks replaceable.</Affects>
         </label>
       </section>
 
@@ -95,9 +91,9 @@ export default function League({ ctx }) {
         <h2 id="ls-lineup">Lineup</h2>
         <label className="field">
           <span className="lname">Starting slots, comma separated</span>
-          <input className="slots" value={s.slots} onChange={(e) => set('slots', e.target.value.toUpperCase().replace(/[^A-Z,]/g, ''))} />
-          <small>ESPN default: PG,SG,SF,PF,C,G,F,UT,UT,UT. G = any guard, F = any forward, UT = anyone.</small>
-          <Affects>the suggested lineup on Today.</Affects>
+          <input className="slots" value={s.slots} onChange={(e) => set('slots', e.target.value.toUpperCase().replace(/[^A-Z,/]/g, ''))} />
+          <small>Your league: PG,SG,SF,PF,C,G,F,PF/C,UT,UT. G = any guard, F = any forward, PF/C = power forward or centre, UT = anyone.</small>
+          <Affects>the starting lineup shown on My team.</Affects>
         </label>
       </section>
 
@@ -105,7 +101,7 @@ export default function League({ ctx }) {
         <h2 id="ls-waivers">Waivers</h2>
         <label className="field row">
           <span className="lname">Hide players owned in more than this % of ESPN leagues</span>{num('ownCutoff', 10, 100)}
-          <small>Only used until you mark the whole draft in Draft. Lower it for small leagues, raise it for big ones.</small>
+          <small>A rough stand-in for who is actually free in your league. Lower it for small leagues, raise it for big ones.</small>
           <Affects>who shows up on Waivers.</Affects>
         </label>
       </section>

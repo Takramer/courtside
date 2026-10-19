@@ -37,7 +37,7 @@ export default function Waivers({ ctx }) {
         <div>
           <h1>Waiver wire</h1>
           <p className="lead">Players nobody in your league owns. Adding the right one each week is the biggest edge most managers ignore.
-            {!ctx.exactTaken && <> Until you finish your draft here, players on more than {settings.ownCutoff}% of ESPN teams are hidden as "probably taken".</>}</p>
+            {!ctx.exactTaken && <> This list cannot see your league's other nine rosters, so anyone owned in more than {settings.ownCutoff}% of ESPN leagues is hidden as "probably taken". Check he is free in ESPN before you plan around him.</>}</p>
         </div>
       </div>
 
