@@ -5,6 +5,7 @@ import { computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, normName, tagNews } fr
 import { Toaster, toast } from 'sonner'
 import { PlayerDrawer, PlayerFinder } from './components.jsx'
 import Team from './pages/Team.jsx'
+import Matchup from './pages/Matchup.jsx'
 import Waivers from './pages/Waivers.jsx'
 import Trade from './pages/Trade.jsx'
 import News from './pages/News.jsx'
@@ -13,6 +14,7 @@ import Learn from './pages/Learn.jsx'
 
 const TABS = [
   ['team', 'My team', Team],
+  ['week', 'This week', Matchup],
   ['waivers', 'Waivers', Waivers],
   ['trade', 'Trade', Trade],
   ['news', 'News', News],

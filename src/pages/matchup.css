@@ -1,0 +1,21 @@
+.matchuppage .headmeta { display: flex; align-items: center; gap: var(--s3); }
+.matchuppage .livetag { font-size: 13px; color: var(--muted); }
+.matchuppage .livetag.on { color: var(--accent); }
+.matchuppage .score { display: flex; align-items: center; justify-content: center; gap: var(--s5); margin: var(--s5) 0 var(--s2); padding: var(--s4) 0; border-top: 2px solid var(--line2); border-bottom: 1px solid var(--line); }
+.matchuppage .team { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; min-width: 0; }
+.matchuppage .tname { font-family: var(--cond); font-size: 17px; color: var(--muted); text-align: center; }
+.matchuppage .team b { font-family: var(--cond); font-size: 54px; line-height: 1; font-weight: 600; font-variant-numeric: tabular-nums; }
+.matchuppage .team.ahead .tname { color: var(--text); }
+.matchuppage .team.ahead b { color: var(--accent); }
+.matchuppage .vs { font-family: var(--cond); font-size: 15px; color: var(--muted); }
+.matchuppage .verdict { text-align: center; color: var(--muted); margin: 0 0 var(--s5); }
+.matchuppage .sides { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s5); }
+.matchuppage .side h3 { margin-top: 0; }
+.matchuppage .slot { font-family: var(--cond); font-size: 13px; color: var(--muted); }
+.matchuppage .opp { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.matchuppage tr.bench td { color: var(--muted); }
+.matchuppage tr.split td { font-family: var(--cond); font-size: 13px; color: var(--muted); border-top: 1px solid var(--line2); padding-top: var(--s2); }
+@media (max-width: 800px) {
+  .matchuppage .sides { grid-template-columns: 1fr; }
+  .matchuppage .team b { font-size: 40px; }
+}
