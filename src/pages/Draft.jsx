@@ -1,7 +1,8 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { bestLineup, draftSuggestions, likelyGone, positionOutlook, positionRun, roundTip, snakePicks } from '../lib/model.js'
 import { PlayerName, ValueTip, ZCell, catHeaders, fmt } from '../components.jsx'
 import { useLocal } from '../lib/store.js'
+import { useLiveDraft } from '../lib/live.js'
 import './draft.css'
 
 const POS = ['All', 'PG', 'SG', 'SF', 'PF', 'C']
@@ -10,13 +11,17 @@ const LEVEL = { now: ['bad', 'Take now'], soon: ['warn', 'Take soon'], wait: ['i
 export default function Draft({ ctx }) {
   const { settings, values, mineSet, takenSet, players } = ctx
   const [log, setLog] = useLocal('cs.draftlog', [])
+  const [conn, setConn] = useLocal('cs.espn', { league: '', s2: '', swid: '', team: null })
+  const live = useLiveDraft(conn.league ? conn : null)
   const [q, setQ] = useState('')
   const [pos, setPos] = useState('All')
   const [showTaken, setShowTaken] = useState(false)
   const searchRef = useRef(null)
 
   const picks = snakePicks(settings.teams, settings.draftSlot, settings.rosterSize)
-  const current = ctx.mine.length + ctx.taken.length + 1
+  // Connected, ESPN's own pick numbers rule: they count picks of players outside our top-650 pool too.
+  const lastLive = live.picks[live.picks.length - 1]
+  const current = lastLive ? lastLive.overall + 1 : ctx.mine.length + ctx.taken.length + 1
   const nextPick = picks.find((x) => x >= current)
   const followingPick = picks.find((x) => x > nextPick)
   const onClock = current === nextPick
@@ -41,6 +46,28 @@ export default function Draft({ ctx }) {
       } },
     })
   }
+  // Fold ESPN's board into the local one. Runs on every poll; already-marked players fall out as no-ops.
+  const synced = useRef(new Set())
+  const firstSync = useRef(true)
+  const teamRef = useRef(conn.team)
+  useEffect(() => {
+    if (!live.at) return // nothing read from ESPN yet
+    // Naming your team later has to move the picks you already made out of Taken, so re-read the whole board.
+    if (teamRef.current !== conn.team) { teamRef.current = conn.team; synced.current = new Set(); firstSync.current = true }
+    const fresh = live.picks.filter((pk) => !synced.current.has(pk.playerId) && ctx.byId.has(pk.playerId))
+    live.picks.forEach((pk) => synced.current.add(pk.playerId))
+    const catchUp = firstSync.current // the board as it stood when you connected: no toast for picks you already knew about
+    firstSync.current = false
+    if (!fresh.length) return
+    for (const pk of fresh) ctx.setOwner(pk.playerId, conn.team && pk.teamId === conn.team ? 'mine' : 'taken')
+    setLog((l) => [...l, ...fresh.map((pk) => pk.playerId).filter((id) => !l.includes(id))])
+    if (catchUp) return
+    const names = fresh.map((pk) => ctx.byId.get(pk.playerId).name)
+    ctx.toast(names.length === 1 ? `${names[0]} went off the board` : `${names.length} picks in: ${names.join(', ')}`, { id: 'live-sync' })
+  }, [live.at, conn.team])
+  // A new league id means a new board: forget what we synced from the old one.
+  useEffect(() => { synced.current = new Set(); firstSync.current = true }, [conn.league])
+
   const lastMarked = ctx.byId.get(log[log.length - 1])
   const reset = () => { if (confirm('Clear every pick, including your own team?')) { ctx.setMine([]); ctx.setTaken([]); setLog([]) } }
 
@@ -93,6 +120,8 @@ export default function Draft({ ctx }) {
           <button className="btn ghost sm" onClick={reset}>Reset draft</button>
         </div>
       </div>
+
+      <LiveBar conn={conn} setConn={setConn} live={live} ctx={ctx} />
 
       {/* Sticky: clock status, the search used on every pick, and undo never scroll away. */}
       <div className={`clockbar ${clockState}`}>
@@ -160,7 +189,7 @@ export default function Draft({ ctx }) {
           <p className="muted">{sinceMine.map((p) => `${p.name} (${p.pos.join('/')})`).join(' · ')}</p>
         </section>
       )}
-      {theirs.length === 0 && !done && <p className="muted">When another team picks, type the name in the search box and press Enter to mark him Taken.</p>}
+      {theirs.length === 0 && !done && !conn.league && <p className="muted">When another team picks, type the name in the search box and press Enter to mark him Taken.</p>}
 
       {!done && (
         <section>
@@ -219,6 +248,83 @@ export default function Draft({ ctx }) {
           </table>
         </div>
       </section>
+    </div>
+  )
+}
+
+const STATUS = { on: ['live', 'Live'], done: ['done', 'Draft over'], stale: ['stale', 'Reconnecting'], error: ['bad', 'Not reading'] }
+
+// Reads the real draft board out of ESPN so picks land here without anyone typing them.
+function LiveBar({ conn, setConn, live, ctx }) {
+  const [form, setForm] = useState({ league: conn.league, s2: conn.s2 || '', swid: conn.swid || '' })
+  const [open, setOpen] = useState(false)
+  const [priv, setPriv] = useState(!!conn.s2)
+  const on = !!conn.league
+
+  const connect = (e) => {
+    e.preventDefault()
+    const league = form.league.replace(/\D/g, '')
+    if (!league) return ctx.toast('Paste the leagueId number from your ESPN league URL.')
+    setConn({ league, s2: priv ? form.s2.trim() : '', swid: priv ? form.swid.trim() : '', team: null })
+    setOpen(false)
+  }
+  const stop = () => { setConn({ league: '', s2: '', swid: '', team: null }); setOpen(false) }
+
+  // Your ESPN team tells us which picks are yours; its spot in the pick order is your draft slot.
+  const chooseTeam = (id) => {
+    setConn({ ...conn, team: id })
+    const slot = live.pickOrder.indexOf(id) + 1
+    ctx.setSettings({ ...ctx.settings, teams: live.size || ctx.settings.teams, draftSlot: slot > 0 ? slot : ctx.settings.draftSlot })
+  }
+
+  if (!on) {
+    return (
+      <div className="livebar">
+        {!open ? (
+          <><span className="lvdot off" /><b>Picks typed in by hand.</b> <button className="link" onClick={() => setOpen(true)}>Read them from ESPN instead</button></>
+        ) : (
+          <form className="lvform" onSubmit={connect}>
+            <label>League id
+              <input autoFocus value={form.league} onChange={(e) => setForm({ ...form, league: e.target.value })} placeholder="e.g. 1234567" inputMode="numeric" />
+            </label>
+            <small className="lvhint">Open your league on ESPN and copy the number after <code>leagueId=</code> in the address bar.</small>
+            <label className="lvcheck"><input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} /> Private league (needs two cookies)</label>
+            {priv && (
+              <>
+                <label>espn_s2<input type="password" value={form.s2} onChange={(e) => setForm({ ...form, s2: e.target.value })} autoComplete="off" /></label>
+                <label>SWID<input type="password" value={form.swid} onChange={(e) => setForm({ ...form, swid: e.target.value })} autoComplete="off" placeholder="{....}" /></label>
+                <small className="lvhint">In your browser on fantasy.espn.com: DevTools → Application → Cookies. They stay in this browser and go to ESPN only.</small>
+              </>
+            )}
+            <div className="lvrow">
+              <button className="btn" type="submit">Connect</button>
+              <button className="btn ghost" type="button" onClick={() => setOpen(false)}>Cancel</button>
+            </div>
+          </form>
+        )}
+      </div>
+    )
+  }
+
+  const [cls, label] = STATUS[live.status] || ['off', 'Starting']
+  const ago = live.at ? Math.round((Date.now() - live.at) / 1000) : null
+  return (
+    <div className={`livebar ${cls}`}>
+      <span className={`lvdot ${cls}`} />
+      <b>{label}</b>
+      <span className="muted">
+        {live.picks.length} {live.picks.length === 1 ? 'pick' : 'picks'} off the board
+        {ago != null && ` · checked ${ago < 10 ? 'just now' : `${ago}s ago`}`}
+      </span>
+      {live.teams.length > 0 && (
+        <select aria-label="Which team is yours" value={conn.team ?? ''} onChange={(e) => chooseTeam(+e.target.value)}>
+          <option value="" disabled>Which team is yours?</option>
+          {live.teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      )}
+      <button className="btn ghost sm" onClick={stop}>Stop reading</button>
+      {live.error && <small className="lverr">{live.error}</small>}
+      {!conn.team && live.teams.length > 0 && <small className="lverr">Pick your team, or every pick counts as another team's.</small>}
     </div>
   )
 }

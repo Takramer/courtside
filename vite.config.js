@@ -12,7 +12,8 @@ const devApi = {
         const mod = await server.ssrLoadModule(`/api/${name}.js`)
         res.status = (c) => { res.statusCode = c; return res }
         res.json = (b) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(b)) }
-        await mod.default({ query: Object.fromEntries(url.searchParams) }, res)
+        req.query = Object.fromEntries(url.searchParams) // the handler also reads req.method and the POST body straight off req
+        await mod.default(req, res)
       } catch (e) { next(e) }
     })
   },

@@ -111,3 +111,30 @@
   .draftpage .rowbtn { transition: opacity 120ms ease; }
   .draftpage .rowbtn:active { transform: none; }
 }
+
+/* ---------- Live ESPN board ---------- */
+.draftpage .livebar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s3); margin-top: var(--s4); padding: var(--s2) var(--s3); background: var(--panel); border-left: 2px solid var(--line2); border-radius: 0 var(--r) var(--r) 0; font-size: 14px; }
+.draftpage .livebar b { font-family: var(--cond); font-size: 17px; font-weight: 600; }
+.draftpage .livebar.live { border-left-color: var(--good); }
+.draftpage .livebar.live b { color: var(--good); }
+.draftpage .livebar.stale { border-left-color: var(--warn); }
+.draftpage .livebar.stale b { color: var(--warn); }
+.draftpage .livebar.bad { border-left-color: var(--bad); }
+.draftpage .livebar.bad b { color: var(--bad); }
+.draftpage .livebar.done { border-left-color: var(--accent); }
+.draftpage .lvdot { width: 8px; height: 8px; border-radius: 50%; background: var(--line2); flex: none; }
+.draftpage .lvdot.live { background: var(--good); animation: lv-pulse 1.8s ease-in-out infinite; }
+.draftpage .lvdot.stale { background: var(--warn); }
+.draftpage .lvdot.bad { background: var(--bad); }
+.draftpage .lvdot.done { background: var(--accent); }
+@keyframes lv-pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .draftpage .lvdot.live { animation: none; } }
+.draftpage .livebar select { margin-left: auto; max-width: 220px; }
+.draftpage .lverr { flex-basis: 100%; color: var(--warn); }
+.draftpage .livebar.bad .lverr { color: var(--bad); }
+.draftpage .lvform { display: flex; flex-direction: column; gap: var(--s2); width: 100%; max-width: 440px; }
+.draftpage .lvform label { display: flex; flex-direction: column; gap: 4px; font-family: var(--cond); font-size: 15px; color: var(--muted); }
+.draftpage .lvform .lvcheck { flex-direction: row; align-items: center; gap: 8px; }
+.draftpage .lvhint { color: var(--muted); }
+.draftpage .lvhint code { background: var(--panel2); padding: 1px 4px; border-radius: var(--r-s); }
+.draftpage .lvrow { display: flex; gap: var(--s2); }
