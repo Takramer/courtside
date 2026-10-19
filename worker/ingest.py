@@ -151,10 +151,21 @@ def job_logs(seasons):
     return total
 
 
+def team_game_counts(con, season):
+    """How many games each team actually played. The denominator for availability."""
+    return {team: n for team, n in con.execute(
+        "select team, count(distinct game_id) from player_games where season = ?"
+        " group by team", (season,))}
+
+
 def form_rows(con, season, min_games=5):
-    """Mean and standard deviation of fantasy points per player. The sd is the point: a
-    30-point average with a 14-point spread is a different asset from one with a 5-point
-    spread, and a projection that reports only a mean hides what decides close weeks."""
+    """Mean and standard deviation of fantasy points per player, plus how often he suits up.
+
+    The sd is the point: a 30-point average with a 14-point spread is a different asset from
+    one with a 5-point spread, and a projection that reports only a mean hides what decides
+    close weeks. Availability is the other half — a 40-point player who plays 55 games is
+    worth less over a week than a 34-point player who plays 78."""
+    team_games = team_game_counts(con, season)
     out = []
     for pid, name, team in con.execute(
             "select p.player_id, p.name, p.team from players p"
@@ -170,12 +181,18 @@ def form_rows(con, season, min_games=5):
             continue
         mean = sum(fps) / len(fps)
         var = sum((x - mean) ** 2 for x in fps) / (len(fps) - 1)
+        played = con.execute("select count(*) from player_games where player_id = ? and season = ?",
+                             (pid, season)).fetchone()[0]
+        possible = team_games.get(team, 0)
         out.append({
             "name": name, "nba_id": pid, "team": team, "norm": norm_name(name),
             "g": len(fps),
             "mpg": round(sum(mins) / len(mins), 1),
             "fp_mean": round(mean, 2),
             "fp_sd": round(math.sqrt(var), 2),
+            # Share of his team's games he actually appeared in. Traded players look worse
+            # than they are here, which is why it is a prior the injury report overrides.
+            "avail": round(min(1.0, played / possible), 3) if possible else None,
         })
     out.sort(key=lambda r: -r["fp_mean"])
     return out
@@ -202,9 +219,13 @@ def job_export():
     payload = {
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "season": season,
+        # Whether these are this season's own games or last season's, which decides how much
+        # weight the app gives them against ESPN's projection.
+        "is_current_season": season == THIS_SEASON,
         "scoring": WEIGHTS,
         "note": ("Fantasy points under Grace One Charlotte FBL scoring, last 25 games. "
-                 "fp_sd is the game-to-game spread, not an error bar."),
+                 "fp_sd is the game-to-game spread, not an error bar. avail is the share of "
+                 "his team's games he appeared in, a prior the live injury report overrides."),
         "players": rows,
     }
     with open(path, "w") as f:

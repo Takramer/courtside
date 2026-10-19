@@ -147,7 +147,7 @@ export default function App() {
 
   const ctx = {
     isFree, exactTaken, espn, setEspn, league, linked,
-    players, byId, teams, values, formBy, formUpdated: fdata.data?.updated, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
+    players, byId, teams, values, formBy, formUpdated: fdata.data?.updated, formCurrent: !!fdata.data?.is_current_season, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
     newsBy, injuryBy, status, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
     myPlayers: mine.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => (values.get(b.id)?.val ?? -99) - (values.get(a.id)?.val ?? -99)),
   }

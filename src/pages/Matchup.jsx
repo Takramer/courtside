@@ -1,6 +1,7 @@
-import React from 'react'
-import { etToday, gameOn } from '../lib/model.js'
-import { fmt } from '../components.jsx'
+import React, { useMemo } from 'react'
+import { etToday, gameOn, gamesBetween, weekBounds } from '../lib/model.js'
+import { projectPlayer, weekOutlook } from '../lib/predict.js'
+import { Tip, fmt } from '../components.jsx'
 import { useMatchup } from '../lib/espn.js'
 import './matchup.css'
 
@@ -45,10 +46,43 @@ function Side({ ctx, side, today, label }) {
   )
 }
 
+// Turn one side of the ESPN matchup into something predict.js can price: a projection per
+// player, and how many games he has left before Sunday.
+function priceSide(ctx, side, today, weekEnd, currentSeason) {
+  const out = []
+  let unknown = 0
+  for (const p of side.players) {
+    const known = ctx.byId.get(p.id)
+    const form = ctx.formBy.get(p.id)
+    const espnFp = ctx.values.get(p.id)?.fp
+    if (espnFp == null && !form) { unknown++; continue } // deep bench, nothing to price him on
+    const status = p.inj === 'OUT' || p.inj === 'INJURY_RESERVE' || p.inj === 'SUSPENSION' ? 'out'
+      : ['DAY_TO_DAY', 'QUESTIONABLE', 'DOUBTFUL'].includes(p.inj) ? 'dtd'
+        : known ? ctx.status(known) : 'ok'
+    const proj = projectPlayer({ espnFp, form, status, current: currentSeason })
+    out.push({ id: p.id, name: p.name, ...proj, games: gamesBetween(ctx.teams[p.team], today, weekEnd).length })
+  }
+  return { players: out, unknown }
+}
+
 export default function Matchup({ ctx }) {
   const live = useMatchup(ctx.espn.league && ctx.espn.team ? ctx.espn : null)
   const d = live.data
   const today = etToday()
+  const [, weekEnd] = weekBounds(today)
+  const slots = ctx.settings.slots.split(',').map((x) => x.trim()).filter(Boolean)
+
+  // This season's own games get trusted by how many there are; last season's only as a prior.
+  const currentSeason = ctx.formCurrent
+  const odds = useMemo(() => {
+    if (!d?.me || !d?.opp || !ctx.players.length) return null
+    const mine = priceSide(ctx, d.me, today, weekEnd, currentSeason)
+    const theirs = priceSide(ctx, d.opp, today, weekEnd, currentSeason)
+    if (!mine.players.length || !theirs.players.length) return null
+    // Days left in the fantasy week, today included: the lineup cap is per day, not per week.
+    const daysLeft = Math.max(1, Math.round((new Date(`${weekEnd}T12:00:00Z`) - new Date(`${today}T12:00:00Z`)) / 86400000) + 1)
+    return { ...weekOutlook(mine.players, theirs.players, { starts: slots.length, days: daysLeft }), unknown: mine.unknown + theirs.unknown }
+  }, [d, ctx.players, ctx.formBy, today, weekEnd, currentSeason, slots.length])
 
   if (!ctx.espn.league || !ctx.espn.team) {
     return (
@@ -98,6 +132,8 @@ export default function Matchup({ ctx }) {
             {lead === 0 ? 'Dead level.' : lead > 0 ? `You are ahead by ${fmt(lead, 1)}.` : `You are behind by ${fmt(-lead, 1)}.`}
             {' '}Week {d.matchupPeriod}, day {d.scoringPeriod}.
           </p>
+
+          {odds && <Odds odds={odds} updated={ctx.formUpdated} />}
           <div className="sides">
             <Side ctx={ctx} side={d.me} today={today} label="Your day" />
             <Side ctx={ctx} side={d.opp} today={today} label={`${d.opp.name}'s day`} />
@@ -105,5 +141,68 @@ export default function Matchup({ ctx }) {
         </>
       )}
     </div>
+  )
+}
+
+const pct = (x) => `${Math.round(x * 100)}%`
+
+// The odds, and the four things worth knowing about them.
+function Odds({ odds, updated }) {
+  const { pWin, me, opp, gameEdge, swing, danger } = odds
+  const verdict = pWin > 0.8 ? 'You should win this'
+    : pWin > 0.6 ? 'You are favoured'
+      : pWin > 0.4 ? 'This is a coin flip'
+        : pWin > 0.2 ? 'You are the underdog' : 'You need help'
+
+  return (
+    <section className="odds">
+      <div className="oddshead">
+        <span className="big" style={{ color: pWin >= 0.5 ? 'var(--good)' : 'var(--bad)' }}>{pct(pWin)}</span>
+        <div>
+          <b>{verdict}</b>
+          <small>
+            Chance of winning the week, from each player's average, how much he swings, how
+            often he plays, and the games left on the calendar. Not ESPN's number — ours.
+          </small>
+        </div>
+      </div>
+
+      <ul className="oddsfacts">
+        <li><b>{fmt(me.mu, 0)}</b> <span>your projected total, give or take {fmt(me.sd, 0)}</span></li>
+        <li><b>{fmt(opp.mu, 0)}</b> <span>his, give or take {fmt(opp.sd, 0)}</span></li>
+        <li><b>{gameEdge > 0 ? `+${gameEdge}` : gameEdge}</b> <span>games played edge: {me.games} left against {opp.games}</span></li>
+        {danger && <li><b>{fmt(danger.mu, 0)}</b> <span>his biggest threat: {danger.name}, over {danger.games} {danger.games === 1 ? 'game' : 'games'}</span></li>}
+      </ul>
+
+      {swing.length > 0 && (
+        <>
+          <h3>Who the week rests on</h3>
+          <table className="t">
+            <thead><tr>
+              <th>Player</th><th className="num">Games</th><th className="num">Points</th>
+              <th className="num"><Tip text="How far the win chance above falls if he misses the rest of the week. Recomputed without him, not a share of the total.">If he sits</Tip></th>
+            </tr></thead>
+            <tbody>
+              {swing.map((p) => (
+                <tr key={p.id}>
+                  <td>{p.name}</td>
+                  <td className="num">{p.games}</td>
+                  <td className="num">{fmt(p.points, 0)}</td>
+                  <td className="num strong">{p.cost > 0.005 ? `−${pct(p.cost)}` : '–'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      <small className="oddsnote">
+        Built on form from {updated ? new Date(updated).toLocaleDateString() : 'the last worker run'}.
+        Player nights are treated as independent, which they are not quite — teammates share a
+        ball — so the extremes are a little overconfident. Nothing here is graded yet: that is
+        the next thing worth building, and until it exists treat the number as an argument,
+        not a fact.
+      </small>
+    </section>
   )
 }

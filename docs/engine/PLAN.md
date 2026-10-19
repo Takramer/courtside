@@ -1,6 +1,6 @@
 # Courtside engine — plan
 
-Written 2026-10-19. Phases 1 and 2 are built and deployed; 3 onward is still a plan.
+Written 2026-10-19. Phases 1 to 4 are built and deployed; 5 onward is still a plan.
 
 Two jobs, in this order:
 
@@ -98,23 +98,21 @@ fantasy points second, and most of the "why" falls out for free.
 - `p_play` — chance he suits up at all: injury status, rest patterns, suspension, the legal
   and personal events below.
 
-**Step 3 — the week.** Your total is the sum over every game your starters play. Draw 20,000
-weeks:
+**Step 3 — the week.** Built, and not as a simulation. A player-day is a coin flip and then
+a draw — he plays or he does not, and if he plays his score varies — so it has mean `p·m` and
+variance `p(s² + m²) − (p·m)²`. A week is forty of those added up, and the sum of forty
+independent things is close enough to a bell curve that P(win) is just the chance one normal
+lands above another. Instant, the same answer every time you look at it, and checkable by
+hand, which a Monte Carlo with a random seed is not.
 
-```
-for each simulated week:
-    for each day, for each roster slot:
-        pick the lineup the way the app's bestLineup does
-        for each starter with a game:
-            play? ~ Bernoulli(p_play)
-            fp    ~ Normal(mean_fp, sd_fp) scaled by a shared per-game pace factor
-    my_total vs opp_total
-P(win) = share of weeks I come out ahead
-```
+The starts are capped at ten a day and handed to the best players first, because you cannot
+start thirteen men in ten slots and the bench would otherwise be counted as though it played.
 
-Two correlations that matter and that naive simulations get wrong: teammates compete for the
-same minutes (negative), and players in the same real game share a pace (positive). A shared
-per-game factor covers the second; a minutes budget per NBA team covers the first.
+What the closed form gives up: player-days are treated as independent, and they are not quite
+— teammates share a ball, and two players in the same real game share its pace. The error is
+small next to the spread of the players themselves and it makes the extremes a little
+overconfident. If phase 8 shows that bias is real, a shared per-game factor and a per-team
+minutes budget are the fix, and that is when a simulation earns its keep.
 
 **Step 4 — the breakdown.** The probability alone is a party trick. What you want beside it:
 
@@ -165,8 +163,8 @@ Each one ships on its own and is useful alone.
 |---|---|---|
 | 1 | **Done.** Encrypted device link carries the connection to the phone | You asked for it, and it needed no database |
 | 2 | **Done.** Worker pulls game logs to SQLite, writes `public/data/form.json` | Everything downstream needs the game log |
-| 3 | `mean_fp` / `sd_fp` / `p_play` per player per game | The first real projection |
-| 4 | Weekly simulation + the breakdown on **This week** | The number you asked for |
+| 3 | **Done.** `mean_fp` / `sd_fp` / `p_play` per player, in `src/lib/predict.js` | The first real projection |
+| 4 | **Done.** Win probability and the breakdown on **This week** | The number you asked for |
 | 5 | Defence-vs-position and the opponent adjustment | Sharpens step 3 |
 | 6 | Matchup history and the friction table | The detail nobody else has |
 | 7 | Event feed: injuries, legal, suspensions → `p_play` | Catches the week-wreckers |

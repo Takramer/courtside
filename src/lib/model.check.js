@@ -68,3 +68,57 @@ assert.equal(normName('Luka Dončić'), normName('Luka Doncic'))
 assert.equal(normName('Jaren Jackson Jr.'), 'jaren jackson')
 
 console.log('model checks pass')
+
+// ---------- predict.js: the week's odds ----------
+const P = await import('./predict.js')
+
+// Normal CDF against values you can look up in a table.
+assert.ok(Math.abs(P.normalCdf(0) - 0.5) < 1e-9)
+assert.ok(Math.abs(P.normalCdf(1.6449) - 0.95) < 1e-3)
+assert.ok(Math.abs(P.normalCdf(-1.96) - 0.025) < 1e-3)
+
+// A player who never plays contributes nothing, and no uncertainty either.
+assert.deepEqual(P.playerDay({ mean: 40, sd: 12, pPlay: 0 }), { mu: 0, variance: 0 })
+// One who always plays is just his own spread.
+const sure = P.playerDay({ mean: 40, sd: 12, pPlay: 1 })
+assert.ok(Math.abs(sure.mu - 40) < 1e-9 && Math.abs(sure.variance - 144) < 1e-9)
+// Missing games costs mean AND adds variance: that is the whole point of carrying pPlay.
+const flaky = P.playerDay({ mean: 40, sd: 12, pPlay: 0.5 })
+assert.ok(flaky.mu === 20 && flaky.variance > sure.variance)
+
+// Out outranks any history; day-to-day is a coin flip; otherwise availability is the prior.
+assert.equal(P.projectPlayer({ espnFp: 40, status: 'out' }).pPlay, 0)
+assert.equal(P.projectPlayer({ espnFp: 40, status: 'dtd' }).pPlay, 0.5)
+// Last season's absences nudge the chance he plays; they do not set it. A player who missed
+// four fifths of last season but is on the floor today is not 20% to suit up tomorrow.
+assert.equal(P.projectPlayer({ espnFp: 40, form: { fp_mean: 40, fp_sd: 9, avail: 1 } }).pPlay, 0.92)
+const fragile = P.projectPlayer({ espnFp: 40, form: { fp_mean: 40, fp_sd: 9, avail: 0.195 } }).pPlay
+assert.ok(fragile > 0.6 && fragile < 0.75, `history nudges, it does not rule: ${fragile}`)
+assert.ok(P.projectPlayer({ espnFp: 40, form: { fp_mean: 40, fp_sd: 9, avail: 0.6 } }).pPlay
+        > P.projectPlayer({ espnFp: 40, form: { fp_mean: 40, fp_sd: 9, avail: 0.2 } }).pPlay)
+// Last season's form is a prior, so it pulls the projection without replacing it.
+const blended = P.projectPlayer({ espnFp: 40, form: { fp_mean: 20, fp_sd: 6, g: 70, avail: 0.9 } })
+assert.ok(blended.mean > 20 && blended.mean < 40, 'blend sits between ESPN and form')
+
+// Two identical teams are a coin flip, whatever the numbers are.
+const even = [{ id: 1, name: 'A', mean: 40, sd: 10, pPlay: 1, games: 4 }]
+assert.ok(Math.abs(P.winProbability(P.teamWeek(even), P.teamWeek(even)) - 0.5) < 1e-9)
+// More games is an edge on its own, which is the thing managers miss.
+const four = P.weekOutlook([{ id: 1, name: 'A', mean: 40, sd: 10, pPlay: 1, games: 4 }],
+                           [{ id: 2, name: 'B', mean: 40, sd: 10, pPlay: 1, games: 3 }])
+assert.ok(four.pWin > 0.6 && four.gameEdge === 1)
+// Losing the best player has to cost more win probability than losing the worst.
+const roster = [{ id: 1, name: 'Star', mean: 50, sd: 12, pPlay: 1, games: 4 },
+                { id: 2, name: 'Spare', mean: 12, sd: 5, pPlay: 1, games: 4 }]
+const hit = P.weekOutlook(roster, [{ id: 3, name: 'C', mean: 45, sd: 12, pPlay: 1, games: 4 }])
+assert.equal(hit.swing[0].name, 'Star')
+assert.ok(hit.swing[0].cost > hit.swing[1].cost)
+// The lineup cap bites: with two slots over one day, a third man's game cannot be started,
+// and the starts go to the best players first.
+const squeeze = P.teamWeek([{ id: 1, name: 'Best', mean: 50, sd: 10, pPlay: 1, games: 1 },
+                            { id: 2, name: 'Good', mean: 30, sd: 8, pPlay: 1, games: 1 },
+                            { id: 3, name: 'Bench', mean: 9, sd: 3, pPlay: 1, games: 1 }],
+                           { starts: 2, days: 1 })
+assert.equal(squeeze.players.find((p) => p.name === 'Bench').games, 0)
+assert.equal(squeeze.players.find((p) => p.name === 'Best').games, 1)
+assert.ok(Math.abs(squeeze.mu - 80) < 1e-9, 'only the two who start are counted')
