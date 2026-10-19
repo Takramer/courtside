@@ -37,6 +37,8 @@ export default function League({ ctx }) {
       <h1>League setup</h1>
       <p className="lead">Copy these from your league's settings page (in the ESPN, Yahoo or Sleeper app: League → Settings). Everything saves in this browser as you type.</p>
 
+      <EspnLink ctx={ctx} />
+
       <section className="lsec" aria-labelledby="ls-scoring">
         <h2 id="ls-scoring">Scoring</h2>
         <div className="field">
@@ -111,5 +113,80 @@ export default function League({ ctx }) {
         <small>{isDefault ? 'You are on the default settings.' : 'Puts every setting back to Grace One Charlotte FBL. You can undo it.'}</small>
       </div>
     </div>
+  )
+}
+
+// Reads the real league from ESPN: every roster, and ESPN's own list of who is free.
+function EspnLink({ ctx }) {
+  const { espn, setEspn, league, linked } = ctx
+  const [form, setForm] = useState({ league: espn.league, s2: espn.s2 || '', swid: espn.swid || '' })
+  const [open, setOpen] = useState(false)
+  const on = !!espn.league
+
+  const connect = (e) => {
+    e.preventDefault()
+    const id = form.league.replace(/\D/g, '')
+    if (!id) return ctx.toast('Paste the leagueId number from your ESPN league URL.')
+    setEspn({ league: id, s2: form.s2.trim(), swid: form.swid.trim(), team: null })
+    setOpen(false)
+  }
+  const stop = () => { setEspn({ league: '', s2: '', swid: '', team: null }); setOpen(false) }
+
+  if (!on) {
+    return (
+      <section className="lsec espnlink">
+        <h2>Read my league from ESPN</h2>
+        {!open ? (
+          <>
+            <p>Right now the app guesses who is free from how many ESPN leagues own a player. Connect your league and it reads the real thing: all ten rosters, and ESPN's own free agent list.</p>
+            <button className="btn" onClick={() => setOpen(true)}>Connect my league</button>
+          </>
+        ) : (
+          <form className="espnform" onSubmit={connect}>
+            <label>League id
+              <input autoFocus value={form.league} onChange={(e) => setForm({ ...form, league: e.target.value })} placeholder="e.g. 2028559007" inputMode="numeric" />
+              <small>The number after <code>leagueId=</code> in your ESPN league's address bar.</small>
+            </label>
+            <label>espn_s2
+              <input type="password" value={form.s2} onChange={(e) => setForm({ ...form, s2: e.target.value })} autoComplete="off" />
+            </label>
+            <label>SWID
+              <input type="password" value={form.swid} onChange={(e) => setForm({ ...form, swid: e.target.value })} autoComplete="off" placeholder="{....}" />
+            </label>
+            <small>A private league needs both cookies. In your browser on fantasy.espn.com: DevTools → Application → Cookies. They stay in this browser and are sent to ESPN only.</small>
+            <div className="row">
+              <button className="btn" type="submit">Connect</button>
+              <button className="btn ghost" type="button" onClick={() => setOpen(false)}>Cancel</button>
+            </div>
+          </form>
+        )}
+      </section>
+    )
+  }
+
+  return (
+    <section className="lsec espnlink">
+      <h2>{league.name || 'Your ESPN league'}</h2>
+      {league.error && <p className="banner bad">{league.error}</p>}
+      {league.teams.length > 0 && (
+        <label className="field row">
+          <span className="lname">Which team is yours</span>
+          <select value={espn.team ?? ''} onChange={(e) => setEspn({ ...espn, team: +e.target.value })}>
+            <option value="" disabled>Pick your team</option>
+            {league.teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </label>
+      )}
+      <p className="muted">
+        {league.loading ? 'Reading ESPN…'
+          : linked ? `All ${league.teams.length} rosters read ${new Date(league.at).toLocaleTimeString()}. My team and Waivers now follow ESPN, so add or drop there and reload this page.`
+          : league.at ? 'Pick your team above and the rosters load.'
+          : 'Not read yet.'}
+      </p>
+      <div className="row">
+        <button className="btn ghost" onClick={league.reload} disabled={league.loading}>Read again</button>
+        <button className="btn ghost" onClick={stop}>Disconnect</button>
+      </div>
+    </section>
   )
 }

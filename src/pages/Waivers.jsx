@@ -37,7 +37,9 @@ export default function Waivers({ ctx }) {
         <div>
           <h1>Waiver wire</h1>
           <p className="lead">Players nobody in your league owns. Adding the right one each week is the biggest edge most managers ignore.
-            {!ctx.exactTaken && <> This list cannot see your league's other nine rosters, so anyone owned in more than {settings.ownCutoff}% of ESPN leagues is hidden as "probably taken". Check he is free in ESPN before you plan around him.</>}</p>
+            {ctx.linked
+              ? <> These are the players ESPN itself lists as free in your league, read at {new Date(ctx.league.at).toLocaleTimeString()}.</>
+              : !ctx.exactTaken && <> This list cannot see your league's other nine rosters, so anyone owned in more than {settings.ownCutoff}% of ESPN leagues is hidden as "probably taken". Connect your league on <a href="#league">League setup</a> to read the real thing.</>}</p>
         </div>
       </div>
 
@@ -62,7 +64,9 @@ export default function Waivers({ ctx }) {
       {list.length === 0 ? (
         <div className="emptystate">
           <b>No available {pos === 'All' ? 'players' : POS.find((x) => x[0] === pos)[1].toLowerCase() + 's'} right now.</b>
-          <p>{pos !== 'All' ? 'Try all positions: a good player at any spot can go in a utility (UT) slot.' : `Everyone healthy is owned or hidden as "probably taken" (on more than ${settings.ownCutoff}% of ESPN teams). Raise that cutoff on League setup to see more.`}</p>
+          <p>{pos !== 'All' ? 'Try all positions: a good player at any spot can go in a utility (UT) slot.'
+            : ctx.linked ? 'Everyone ESPN lists as free in your league is either hurt or already on your roster.'
+            : `Everyone healthy is owned or hidden as "probably taken" (on more than ${settings.ownCutoff}% of ESPN teams). Raise that cutoff on League setup to see more.`}</p>
           {pos !== 'All' && <div className="row"><button className="btn ghost" onClick={() => setPos('All')}>Show all positions</button></div>}
         </div>
       ) : (

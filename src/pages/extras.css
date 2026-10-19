@@ -203,3 +203,10 @@
   .tradepage .tv { animation: none; }
   .scrim .drawer .x:active, .scrim .drawer .downer .seg button:active, .tradepage .rm:active, .newspage .chips button:active { transform: none; }
 }
+
+/* ---------- ESPN league link ---------- */
+.leaguepage .espnlink select { max-width: 260px; }
+.leaguepage .espnform { display: flex; flex-direction: column; gap: var(--s3); max-width: 460px; }
+.leaguepage .espnform label { display: flex; flex-direction: column; gap: 4px; font-family: var(--cond); font-size: 15px; color: var(--muted); }
+.leaguepage .espnform code { background: var(--panel2); padding: 1px 4px; border-radius: var(--r-s); }
+.leaguepage .espnlink .row { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s3); }

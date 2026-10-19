@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useFetch, useLocal } from './lib/store.js'
+import { useEspnLeague } from './lib/espn.js'
 import { computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, normName, tagNews } from './lib/model.js'
 import { Toaster, toast } from 'sonner'
 import { PlayerDrawer, PlayerFinder } from './components.jsx'
@@ -49,6 +50,8 @@ export default function App() {
   const [mine, setMine] = useLocal('cs.mine', [])
   const [taken, setTaken] = useLocal('cs.taken', [])
   const [rosterLoaded, setRosterLoaded] = useLocal('cs.roster.drafted', false)
+  const [espn, setEspn] = useLocal('cs.espn', { league: '', s2: '', swid: '', team: null })
+  const league = useEspnLeague(espn.league ? espn : null)
   const [openId, setOpenId] = useState(null)
   const [finding, setFinding] = useState(false)
 
@@ -63,10 +66,18 @@ export default function App() {
 
   const s = { ...DEFAULT_SETTINGS, ...settings }
   const players = pdata.data?.players || []
-  // Load the team he drafted, once, replacing whatever this browser had marked before the draft.
-  // After that the app's own Add and Drop are the record: this never runs again.
+  // Connected: every roster in the league comes from ESPN, so an add or drop there shows up here on the next load.
+  const linked = !!(league.at && espn.team && league.rosters[espn.team])
   useEffect(() => {
-    if (rosterLoaded || !players.length) return
+    if (!linked || !players.length) return
+    const known = (ids) => ids.filter((id) => byId.has(id))
+    setMine(known(league.rosters[espn.team]))
+    setTaken(known(Object.entries(league.rosters).filter(([id]) => +id !== espn.team).flatMap(([, ids]) => ids)))
+  }, [league.at, espn.team, players])
+
+  // Not connected, first visit: load the team he drafted. After that the app's own Add and Drop are the record.
+  useEffect(() => {
+    if (linked || rosterLoaded || !players.length) return
     const idByName = new Map(players.map((p) => [normName(p.name), p.id]))
     const ids = DEFAULT_ROSTER.map((n) => idByName.get(normName(n))).filter(Boolean)
     if (ids.length) setMine(ids)
@@ -111,12 +122,13 @@ export default function App() {
     toast(`${byId.get(id)?.name ?? 'Player'} ${OWNER_MSG[who]}`, { action: { label: 'Undo', onClick: () => setOwner(id, prev) } })
   }
 
-  // After a full draft we know exactly who is taken; before that, guess from ESPN ownership.
-  const exactTaken = taken.length >= (s.teams - 1) * s.rosterSize * 0.8
-  const isFree = (p) => !mineSet.has(p.id) && !takenSet.has(p.id) && (exactTaken || p.own < s.ownCutoff)
+  // Connected, ESPN names the free agents in this league outright. Otherwise: anyone unmarked who few leagues own.
+  const freeIds = linked && league.freeIds ? new Set(league.freeIds) : null
+  const exactTaken = !!freeIds || taken.length >= (s.teams - 1) * s.rosterSize * 0.8
+  const isFree = (p) => (freeIds ? freeIds.has(p.id) : !mineSet.has(p.id) && !takenSet.has(p.id) && (exactTaken || p.own < s.ownCutoff))
 
   const ctx = {
-    isFree, exactTaken,
+    isFree, exactTaken, espn, setEspn, league, linked,
     players, byId, teams, values, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
     newsBy, injuryBy, status, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
     myPlayers: mine.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => (values.get(b.id)?.val ?? -99) - (values.get(a.id)?.val ?? -99)),
