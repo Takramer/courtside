@@ -78,6 +78,32 @@ export default async function handler(req, res) {
     const matchupPeriod = sj.status?.currentMatchupPeriod ?? 1
     const names = new Map((sj.teams || []).map((t) => [t.id, teamName(t)]))
 
+    // Phase 8 asks a different question: how did every week that is already over actually
+    // end? One call with no period filter answers it, and the finals come from ESPN rather
+    // than from whatever the app happened to see last time it was open — which would be
+    // Sunday afternoon's score for anyone who did not check on Sunday night.
+    if (body.history) {
+      const hr = await fetch(`${BASE}/${league}?view=mMatchupScore`, { headers })
+      if (!hr.ok) throw new Error(espnError(hr.status, league))
+      const hj = await hr.json()
+      const weeks = []
+      for (const m of hj.schedule || []) {
+        const side = m.home?.teamId === team ? m.home : m.away?.teamId === team ? m.away : null
+        if (!side || m.matchupPeriodId == null) continue
+        const other = side === m.home ? m.away : m.home
+        // Only weeks ESPN has closed. An undecided week has no final to grade against.
+        if (!m.winner || m.winner === 'UNDECIDED') continue
+        weeks.push({
+          week: m.matchupPeriodId,
+          my: side.totalPoints != null ? +(+side.totalPoints).toFixed(1) : null,
+          opp: other?.totalPoints != null ? +(+other.totalPoints).toFixed(1) : null,
+          oppName: names.get(other?.teamId) || null,
+        })
+      }
+      res.setHeader('Cache-Control', 'no-store')
+      return res.status(200).json({ at: new Date().toISOString(), matchupPeriod, weeks })
+    }
+
     const filter = { schedule: { filterMatchupPeriodIds: { value: [matchupPeriod] } } }
     const mr = await fetch(`${BASE}/${league}?view=mMatchupScore&view=mScoreboard&scoringPeriodId=${period}`,
       { headers: { ...headers, 'X-Fantasy-Filter': JSON.stringify(filter) } })

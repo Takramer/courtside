@@ -1,6 +1,6 @@
 # Courtside engine — plan
 
-Written 2026-10-19. Phases 1 to 7 are built; 8 is still a plan.
+Written 2026-10-19. All eight phases are built. What is left is a season of weeks to grade.
 
 Two jobs, in this order:
 
@@ -176,7 +176,7 @@ Each one ships on its own and is useful alone.
 | 5 | **Done.** Defence-vs-position, in `public/data/dvp.json` and `opponentFactor` | Sharpens step 3 |
 | 6 | **Done.** Matchup history and the friction table, in the player panel | The detail nobody else has |
 | 7 | **Done.** One availability resolver, a roster news sweep, off-court flags | Catches the week-wreckers |
-| 8 | Calibration page: what the model said vs what happened | Proves, or disproves, the whole thing |
+| 8 | **Done.** Scorecard: what the model said vs what happened | Proves, or disproves, the whole thing |
 
 Phases 1 and 2 are a weekend each. Phases 3 and 4 are the real work — a week of evenings, and
 they are where the model either earns its keep or does not. Phase 8 is small and the most
@@ -246,3 +246,30 @@ Settled 2026-10-19, phase 7:
 15. **GDELT is out.** Measured, not assumed: 429 on a cold request, roughly one answer a
    minute at best. Google News RSS does the same job and answers every time. See
    [SOURCES.md](SOURCES.md).
+
+Settled 2026-10-19, phase 8:
+
+16. **The forecast is written once, before the games.** `cs.ledger.v1` in localStorage, one
+   entry per week, never overwritten. Open the app on Thursday and the number on screen
+   will have moved — it should have, four nights happened — but Monday's claim is the one
+   graded. A snapshot taken mid-week is kept and marked, not thrown away and not treated as
+   a full-week claim.
+17. **Results come from ESPN, not from the last score the app saw.** `/api/matchup` with
+   `history: true` returns every closed week. Grading against whatever was on screen the
+   last time you looked would score Sunday afternoon for anyone who did not check on Sunday
+   night.
+18. **Points lead, probability follows.** The points projection can be graded from week one:
+   one number predicted, one scored, so bias, typical miss and whether the spread is honest
+   all start answering immediately. A probability cannot — a single 65% that lost says
+   nothing — so it is shown against the 0.25 coin-flip baseline and labelled "too early to
+   judge" until about twenty weeks are in. Being early and being wrong are different, and a
+   page that blurred them would be the dishonest kind of dashboard.
+19. **Ties are excluded, not rounded.** Neither a win nor a loss; counting them either way
+   would flatter or punish the model for nothing.
+
+### What is not yet verified
+
+The grading maths has asserts and the page was checked in a browser against a seeded
+ledger. The ESPN side — `history: true` — has not run against a real league, because that
+needs cookies that stay on Thomas's devices. The first visit to **Scorecard** with the
+league connected is the real test of it.
