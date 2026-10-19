@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { linkFor, newCode, pack } from '../lib/link.js'
 import { CATS, DEFAULT_SETTINGS, DEFAULT_WEIGHTS } from '../lib/model.js'
 import './extras.css'
 
@@ -187,6 +188,48 @@ function EspnLink({ ctx }) {
         <button className="btn ghost" onClick={league.reload} disabled={league.loading}>Read again</button>
         <button className="btn ghost" onClick={stop}>Disconnect</button>
       </div>
+      <PhoneLink ctx={ctx} />
     </section>
+  )
+}
+
+// Your phone cannot read a cookie — iOS Safari has no DevTools. So carry the connection over
+// in a link, encrypted with six digits that travel separately from the link itself.
+function PhoneLink({ ctx }) {
+  const { espn } = ctx
+  const [made, setMade] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const make = async () => {
+    setBusy(true)
+    try {
+      const code = newCode()
+      const token = await pack({ league: espn.league, team: espn.team, s2: espn.s2 || '', swid: espn.swid || '' }, code)
+      setMade({ code, url: linkFor(token) })
+    } catch (e) {
+      ctx.toast(`Could not build the link: ${e.message}`)
+    }
+    setBusy(false)
+  }
+
+  if (!made) {
+    return (
+      <div className="phonelink">
+        <button className="btn ghost sm" onClick={make} disabled={busy || !espn.team}>Set up my phone</button>
+        <small>{espn.team ? 'Makes a one-time link that carries this connection to another device.' : 'Pick your team first.'}</small>
+      </div>
+    )
+  }
+
+  return (
+    <div className="phonelink made">
+      <ol>
+        <li>Send this link to your phone — AirDrop, Messages, however. <button className="btn ghost sm" onClick={() => { navigator.clipboard.writeText(made.url); ctx.toast('Link copied') }}>Copy link</button></li>
+        <li>Open it there. It will ask for a code.</li>
+        <li>Type <b className="code">{made.code}</b>. Do not send the code in the same message as the link.</li>
+      </ol>
+      <small>The link carries your connection encrypted; the code is the only thing that opens it, and it is not in the link. Nothing is stored on any server — the encrypted part lives after the <code>#</code>, which browsers never send. The link stops being useful once you have used it; make another any time.</small>
+      <button className="btn ghost sm" onClick={() => setMade(null)}>Done</button>
+    </div>
   )
 }

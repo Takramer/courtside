@@ -1,52 +1,62 @@
 # Courtside engine — plan
 
-Skeleton only. Nothing here is built yet. Written 2026-10-19.
+Written 2026-10-19. Phases 1 and 2 are built and deployed; 3 onward is still a plan.
 
 Two jobs, in this order:
 
-1. **Make the app remember.** Today everything lives in one browser's localStorage, so your
-   phone and your MacBook are two different apps. Move the state to Supabase.
+1. **Make the app remember.** Everything lives in one browser's localStorage today, so your
+   phone and your MacBook are two different apps.
 2. **Build the engine.** A warehouse of NBA history and news, a projection per player per
    game, and a simulation that answers one question every week: what are my odds, and why.
 
 ---
 
-## 1. Persistence
+## 1. Persistence — no database
 
-### What actually needs to sync
+Supabase is out. The free plan caps you at two projects and both are taken by nydex and
+underline, which have real users and Stripe keys; a third costs $25/month and a shared schema
+puts a toy dashboard in a production database. Neither is worth it, because the premise was
+wrong anyway:
 
-| Thing | Where it lives now | Move to Supabase? |
-|---|---|---|
-| League settings (`cs.settings.v3`) | localStorage | Yes |
-| Roster, taken players | localStorage, overwritten by ESPN | No — ESPN is the record once connected |
-| ESPN league id, your team id | localStorage | Yes |
-| **espn_s2 / SWID cookies** | localStorage | **No. See below.** |
-| Notes you write on players (not built) | — | Yes |
+**Almost nothing needs syncing.** Look at what is actually in localStorage:
 
-The cookies are the one thing I would keep on each device. They are live credentials to your
-ESPN account, not just the fantasy league: anything that can read your league can read your
-account. Putting them in a database means a database leak is an account leak. Pasting them
-twice — once per device — costs you two minutes a season. If you decide you want them synced
-anyway, they get their own encrypted column with a key that never leaves your devices, and I
-will say plainly that it is a worse trade.
+| Thing | Where it really lives |
+|---|---|
+| Scoring weights, slots, roster size, team count | **ESPN already has them**, in the `mSettings` view the app fetches. Read them, stop storing them. |
+| Roster, who is taken, free agents | ESPN. Already read every load. |
+| League id, team id | Two numbers. |
+| espn_s2 / SWID | Credentials. Stay on the device. |
 
-### Identity — decided 2026-10-19: magic link
+So the fix is not a database. It is deriving the settings from ESPN instead of keeping a hand
+typed copy, which also kills a whole class of bug where the app's idea of your league drifts
+from your league. What is left to move between devices is four short strings.
 
-Supabase Auth, email link, no password. You sign in once per device and stay signed in; the
-session refreshes itself. `app_state` keys on `auth.uid()`, so row-level security is the one
-line Supabase writes for you rather than something hand-rolled around a shared secret. It
-costs a sign-in screen on first load, and it means a lost phone is handled by signing out that
-session rather than by rotating a code on every device.
+### Getting them onto the phone
 
-Rejected: a shared sync code. Simpler to build, but unrecoverable and awkward to revoke.
+The problem with "paste the cookies on each device" is that iOS Safari has no DevTools, so
+there is no way to read a cookie on the phone. The answer is to carry them over from the Mac:
 
-### Cost
+1. The Mac encrypts `{league, team, espn_s2, SWID}` with a six-digit code you choose
+   (WebCrypto, AES-GCM, PBKDF2-stretched).
+2. It builds a link with the ciphertext in the **fragment** — the part after `#`, which
+   browsers never send to the server. AirDrop it to yourself.
+3. The phone opens the link, you type the six digits, it decrypts and stores them locally.
 
-A third Supabase project in your org prices at **$0/month** (I asked the API, not a blog).
-It stays separate from nydex and underline, which both have real users and Stripe keys — the
-fantasy dashboard has no business sharing a database with either.
+No server, no storage, no vendor, nothing persisted anywhere that could leak. The ciphertext
+exists only in a link you hand to yourself, and the code never travels with it.
 
----
+### The engine's data
+
+The worker writes **files into this repo**, not rows into a database:
+
+- Raw game logs land in `worker/courtside.db`, a local SQLite file, gitignored. A season is
+  about 27,000 rows; SQLite does not notice.
+- The small derived artifacts — form, defence by position, matchup history, friction — get
+  written to `data/*.json`, committed, and served as static files from Vercel's CDN.
+
+A static JSON file on a CDN beats a database round trip for everything this site does, costs
+nothing, and gives every number a commit that explains where it came from. The trade is that
+new data arrives by deploy rather than instantly, which for a nightly job is not a trade at all.
 
 ## 2. The engine
 
@@ -63,10 +73,12 @@ fantasy dashboard has no business sharing a database with either.
 The website never waits on a slow source. The worker fills Supabase on a schedule; the pages
 read rows. If the worker dies, the site keeps working on ESPN data, just with staler numbers.
 
-**Where the worker runs is an open question.** `stats.nba.com` refuses datacenter IPs — from
-this sandbox it hangs for 60 seconds and `cdn.nba.com` answers 403. It very likely refuses
-Vercel and GitHub Actions too. The reliable home for the worker is your MacBook on a timer,
-which also means the engine only refreshes when your laptop is awake. See SOURCES.md.
+**The worker runs on the MacBook.** `stats.nba.com` refuses the sandbox I work in — a
+60-second hang, 403 from the CDN — but answers your machine fine: all five endpoints the engine
+needs came back, including 26,651 player game logs in 6 seconds and 147,805 possession-level
+matchup rows in 16. Assume Vercel and GitHub Actions are blocked like the sandbox. The cost of
+the laptop being the host is that the engine only refreshes when it is awake, which a nightly
+job can live with.
 
 ### The model
 
@@ -151,8 +163,8 @@ Each one ships on its own and is useful alone.
 
 | # | What | Why it is first |
 |---|---|---|
-| 1 | Supabase project, app state synced, sync code | You asked for it and it unblocks using the app on your phone |
-| 2 | Worker skeleton: player game logs → `player_games`, nightly | Everything downstream needs the game log |
+| 1 | **Done.** Encrypted device link carries the connection to the phone | You asked for it, and it needed no database |
+| 2 | **Done.** Worker pulls game logs to SQLite, writes `public/data/form.json` | Everything downstream needs the game log |
 | 3 | `mean_fp` / `sd_fp` / `p_play` per player per game | The first real projection |
 | 4 | Weekly simulation + the breakdown on **This week** | The number you asked for |
 | 5 | Defence-vs-position and the opponent adjustment | Sharpens step 3 |
@@ -170,11 +182,11 @@ Settled 2026-10-19:
 
 1. **Identity: magic link.** Supabase Auth, RLS on `auth.uid()`.
 2. **Build order: phases 1 and 2 together** — persistence, then the nightly game-log pull.
-3. **A new Supabase project**, priced at $0/month for your org. Kept away from nydex and
-   underline, which have real users and Stripe keys.
+3. **No database.** Settings come from ESPN, the four strings that are left move by encrypted
+   link, and the engine's data lives in `data/*.json` in this repo. Supabase's free plan was
+   full and nothing here was worth $25/month.
+4. **The worker runs on the MacBook**, verified 2026-10-19 against all five endpoints.
 
 Still open:
 
-4. **Where the worker runs.** Your MacBook is the plan, but `stats.nba.com` has to answer it
-   first: `python worker/ingest.py --check`. Phase 2 does not start until that prints OK.
 5. **The Odds API key** — optional, phase 5, one email to register. Nothing else needs a key.

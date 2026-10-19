@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useFetch, useLocal } from './lib/store.js'
 import { useEspnLeague } from './lib/espn.js'
+import { clearToken, tokenInUrl, unpack } from './lib/link.js'
 import { computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, normName, tagNews } from './lib/model.js'
 import { Toaster, toast } from 'sonner'
 import { PlayerDrawer, PlayerFinder } from './components.jsx'
@@ -47,12 +48,20 @@ export default function App() {
   const tab = useHash()
   const pdata = useFetch('/api/players')
   const ndata = useFetch('/api/news')
+  const fdata = useFetch('/data/form.json') // written by worker/ingest.py; absent until it has run
   // v3: the real ESPN slots (PF/C, two UT) replace the old three-UT guess; a new key drops the settings saved under it
   const [settings, setSettings] = useLocal('cs.settings.v3', DEFAULT_SETTINGS)
   const [mine, setMine] = useLocal('cs.mine', [])
   const [taken, setTaken] = useLocal('cs.taken', [])
   const [rosterLoaded, setRosterLoaded] = useLocal('cs.roster.drafted', false)
   const [espn, setEspn] = useLocal('cs.espn', { league: '', s2: '', swid: '', team: null })
+  const [incoming, setIncoming] = useState(() => tokenInUrl())
+  // Opening the link in a tab that already has the app running only changes the hash, so
+  // watch for that too rather than silently doing nothing.
+  useEffect(() => {
+    const f = () => { const t = tokenInUrl(); if (t) setIncoming(t) }
+    addEventListener('hashchange', f); return () => removeEventListener('hashchange', f)
+  }, [])
   const league = useEspnLeague(espn.league ? espn : null)
   const [openId, setOpenId] = useState(null)
   const [finding, setFinding] = useState(false)
@@ -105,6 +114,13 @@ export default function App() {
     return { newsBy, injuryBy }
   }, [ndata.data, players, byId])
 
+  // Game-to-game spread per player, joined on the same normalised name the news uses.
+  const formBy = useMemo(() => {
+    const by = new Map()
+    for (const r of fdata.data?.players || []) by.set(r.norm ?? normName(r.name), r)
+    return new Map(players.map((p) => [p.id, by.get(normName(p.name))]).filter(([, v]) => v))
+  }, [fdata.data, players])
+
   const mineSet = new Set(mine); const takenSet = new Set(taken)
   const status = (p) => {
     const rep = injuryBy.get(p.id)?.status
@@ -131,7 +147,7 @@ export default function App() {
 
   const ctx = {
     isFree, exactTaken, espn, setEspn, league, linked,
-    players, byId, teams, values, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
+    players, byId, teams, values, formBy, formUpdated: fdata.data?.updated, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
     newsBy, injuryBy, status, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
     myPlayers: mine.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => (values.get(b.id)?.val ?? -99) - (values.get(a.id)?.val ?? -99)),
   }
@@ -149,6 +165,9 @@ export default function App() {
           <span>Find a player</span><kbd>{IS_MAC ? '⌘K' : 'Ctrl K'}</kbd>
         </button>
       </header>
+      {incoming && <LinkIn token={incoming}
+        onDone={(conn) => { setEspn(conn); setIncoming(null); clearToken(); toast('Connected. Your league is on this device now.') }}
+        onCancel={() => { setIncoming(null); clearToken() }} />}
       <main>
         {pdata.error && <div className="banner bad">Could not load player data: {pdata.error}. Refresh in a minute.</div>}
         {!pdata.data && !pdata.error ? <Loading /> : players.length > 0 && <Page ctx={ctx} />}
@@ -157,6 +176,41 @@ export default function App() {
       <Toaster theme="dark" position="bottom-center" offset={20} toastOptions={{ className: 'toast' }} />
       {openId && byId.get(openId) && <PlayerDrawer ctx={ctx} p={byId.get(openId)} onClose={() => setOpenId(null)} />}
       <footer>Data: ESPN fantasy projections and stats, ESPN injury report, RotoWire and Google News. Updated {pdata.data ? new Date(pdata.data.updated).toLocaleTimeString() : '…'}.</footer>
+    </div>
+  )
+}
+
+// Someone opened a setup link made on another device. The link alone is useless: the six
+// digits that open it travelled separately, and a wrong code fails the tag check below.
+function LinkIn({ token, onDone, onCancel }) {
+  const [code, setCode] = useState('')
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setBusy(true); setError(null)
+    try {
+      onDone(await unpack(token, code))
+    } catch {
+      setError('That code does not open this link. Check the six digits on the other device.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="linkin">
+      <form onSubmit={submit}>
+        <h2>Finish setting up this device</h2>
+        <p>Type the six digits shown on the device that made this link.</p>
+        <input autoFocus inputMode="numeric" pattern="[0-9]*" maxLength={6} value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} aria-label="Six digit code" />
+        <div className="row">
+          <button className="btn" type="submit" disabled={code.length !== 6 || busy}>Connect</button>
+          <button className="btn ghost" type="button" onClick={onCancel}>Not now</button>
+        </div>
+        {error && <p className="banner bad">{error}</p>}
+      </form>
     </div>
   )
 }

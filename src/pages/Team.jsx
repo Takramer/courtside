@@ -85,6 +85,7 @@ export default function Team({ ctx }) {
               <th className="num"><ValueTip settings={settings} /></th>
               <th><Tip text="Last 15 days compared with his usual level.">Form</Tip></th>
               {settings.format === 'cats' ? cats.map((c) => <th key={c.k} className="num" title={c.name}>{c.label}</th>) : <th className="num"><Tip text="Fantasy points per game, projected.">FPTS/G</Tip></th>}
+              <th className="num"><Tip text="How much he swings game to game, from last season's logs. A 30-point average that swings 18 is a different player from one that swings 6: the steady one wins close weeks, the wild one is how you win a week you should lose.">Swing</Tip></th>
               <th />
             </tr></thead>
             <tbody>
@@ -100,6 +101,7 @@ export default function Team({ ctx }) {
                       : cold ? <Tip text="Playing well below his usual level lately. Check his news for a reason before you drop him."><span className="tag bad">▼ cold</span></Tip>
                         : <span className="muted">steady</span>}</td>
                     {settings.format === 'cats' ? cats.map((c) => <ZCell key={c.k} z={v?.z[c.k]} />) : <td className="num">{fmt(v?.fp)}</td>}
+                    <td className="num muted">{ctx.formBy.get(p.id) ? `±${fmt(ctx.formBy.get(p.id).fp_sd, 0)}` : '–'}</td>
                     <td className="actions"><button className="btn ghost sm" onClick={() => ctx.moveTo(p.id, 'free')} aria-label={`Remove ${p.name} from my team`}>Remove</button></td>
                   </tr>
                 )

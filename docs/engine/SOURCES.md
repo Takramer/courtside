@@ -22,19 +22,26 @@ no key, no signup. This is the only free source for the fine detail you asked ab
 - `playerdashboardbylastngames`, `playerdashboardbygamesplits` — form, home/away, rest splits
 - `leaguehustlestatsplayer`, `playerestimatedmetrics`, `winprobabilitypbp`
 
-**The problem:** NBA blocks datacenter IPs. From this sandbox `stats.nba.com` hung for a full
-60 seconds with no response, and `cdn.nba.com` returned 403 Access Denied. Vercel and GitHub
-Actions are datacenters too, so assume both are blocked until proven otherwise.
+**Settled 2026-10-19: it works on your Mac.** NBA refuses the sandbox I work in — a 60-second
+hang, and 403 from `cdn.nba.com` — so I expected the same everywhere. Wrong: run from your
+MacBook, every endpoint the engine needs answers.
 
-Three ways out, cheapest first:
+```
+playergamelogs (2025-26)          6.0s   26,651 rows
+commonallplayers                  1.5s      526 rows
+leaguedashptteamdefend            1.7s       30 rows
+leagueseasonmatchups (2025-26)   15.8s  147,805 rows   <- defender vs scorer, by possession
+leaguedashplayerstats (2026-27)   0.6s        0 rows   <- correct: the season has not started
+```
 
-1. **Run the worker on your MacBook** on a schedule (launchd). Residential IP, free, no proxy.
-   Cost: the data only refreshes when the laptop is on. For a nightly job that is fine.
-2. Residential proxy in front of the worker. Works anywhere, costs money, adds a dependency.
-3. Scrape [Basketball-Reference](https://www.basketball-reference.com) instead. Deeper history,
-   no API, and their terms are strict about automated access. Last resort.
+So the worker lives on the laptop, nightly. Assume Vercel and GitHub Actions are blocked like
+the sandbox was. Two things the probe taught, both now in the worker: some endpoints hang on
+one call and answer on the next, so retry with backoff and treat a hang as "later" rather than
+"blocked"; and Python's own `ssl` module fails cert verification on this Mac while `requests`
+is fine, because `requests` carries certifi. Use `requests`.
 
-**Try #1 first** — one command on your Mac settles whether this whole branch of the plan works.
+Fallbacks, if NBA ever locks the door: a residential proxy (costs money), or scraping
+[Basketball-Reference](https://www.basketball-reference.com) (no API, strict terms, last resort).
 
 ## Free, keyless, verified reachable
 

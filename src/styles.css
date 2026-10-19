@@ -266,3 +266,14 @@ kbd { font: 600 12px/1 var(--cond); letter-spacing: 0.03em; color: var(--muted);
 
 /* Page header meta: plain text and a quiet button, not a tab group */
 .headmeta { display: flex; align-items: center; gap: var(--s4); font-size: 14px; color: var(--muted); }
+
+/* Device setup link, and the code prompt it opens on the other device */
+.linkin { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: var(--s4); background: rgba(0, 0, 0, 0.72); }
+.linkin form { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: var(--s3); padding: var(--s5); background: var(--panel); border-top: 2px solid var(--accent); border-radius: 0 0 var(--r) var(--r); box-shadow: var(--shadow-pop); }
+.linkin h2 { margin: 0; }
+.linkin p { margin: 0; color: var(--muted); font-size: 14px; }
+.linkin input { font-family: var(--cond); font-size: 34px; letter-spacing: 0.3em; text-align: center; font-variant-numeric: tabular-nums; }
+.linkin .row { display: flex; gap: var(--s2); }
+.phonelink { margin-top: var(--s4); padding-top: var(--s3); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.phonelink.made ol { margin: 0; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+.phonelink .code { font-family: var(--cond); font-size: 26px; letter-spacing: 0.12em; color: var(--accent); }
