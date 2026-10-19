@@ -65,6 +65,12 @@ export default function Draft({ ctx }) {
     const names = fresh.map((pk) => ctx.byId.get(pk.playerId).name)
     ctx.toast(names.length === 1 ? `${names[0]} went off the board` : `${names.length} picks in: ${names.join(', ')}`, { id: 'live-sync' })
   }, [live.at, conn.team])
+  // Your league sets its order when the draft starts, so the slot often only becomes readable then.
+  useEffect(() => {
+    if (!conn.team || !live.pickOrder.length) return
+    const slot = live.pickOrder.indexOf(conn.team) + 1
+    if (slot > 0 && slot !== settings.draftSlot) ctx.setSettings({ ...settings, draftSlot: slot, teams: live.size || settings.teams })
+  }, [live.pickOrder, conn.team])
   // A new league id means a new board: forget what we synced from the old one.
   useEffect(() => { synced.current = new Set(); firstSync.current = true }, [conn.league])
 
