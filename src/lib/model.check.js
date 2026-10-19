@@ -159,3 +159,52 @@ assert.ok(Math.abs(vsWas.matchupEdge - 8.8) < 0.05, `edge is real points: ${vsWa
 assert.equal(P.weekOutlook(player(null), player(null)).matchupEdge, null, 'no table, no claim')
 
 console.log('predict checks pass')
+
+// ---------- phase 6: who guards him, and who he has history with ----------
+const MU = {
+  season: '2025-26', min_poss: 30, top_n: 8,
+  names: { 1: 'Nikola Jokić', 10: 'Rudy Gobert', 11: 'Alperen Sengun', 12: 'Retired Man' },
+  by_norm: { 'nikola jokic': 1 },
+  now: { 10: 'MIN', 11: 'HOU' }, // 12 has no team: out of the league
+  scorers: { 1: [
+    { d: 10, gp: 4, poss: 95.1, pts100: 35.8, fga: 30, fg: 0.68, tov: 2 },
+    { d: 11, gp: 5, poss: 109.1, pts100: 42.2, fga: 40, fg: 0.56, tov: 3 },
+    { d: 12, gp: 3, poss: 120, pts100: 20, fga: 8, fg: null, tov: 1 },
+  ] },
+}
+
+// ESPN writes Jokic, the NBA writes Jokić. Get this wrong and the best players in the
+// league silently have no matchup history at all.
+assert.equal(P.defenderHistory(MU, 'Nikola Jokic').length, 3)
+// Nothing to say is an empty list, never a crash and never a fabricated row.
+assert.deepEqual(P.defenderHistory(null, 'Nikola Jokic'), [])
+assert.deepEqual(P.defenderHistory(MU, 'Someone Else'), [])
+
+// Most-guarded first when no week is given.
+assert.equal(P.defenderHistory(MU, 'Nikola Jokic')[0].name, 'Retired Man')
+// Given the week, the men he actually meets come first, whatever the possession count.
+const wk = P.defenderHistory(MU, 'Nikola Jokic', ['MIN'])
+assert.equal(wk[0].name, 'Rudy Gobert')
+assert.ok(wk[0].thisWeek && !wk[1].thisWeek)
+// ESPN spells six teams differently. A Washington or Golden State week must still match.
+const espnWeek = P.defenderHistory({ ...MU, now: { 10: 'WAS' } }, 'Nikola Jokic', ['WSH'])
+assert.ok(espnWeek[0].thisWeek, 'ESPN WSH has to find NBA WAS')
+// A defender out of the league is carried, but never marked as this week's problem.
+assert.equal(P.defenderHistory(MU, 'Nikola Jokic', ['MIN']).find((r) => r.id === 12).team, null)
+// Under ten attempts the percentage is withheld rather than printed as zero.
+assert.equal(P.defenderHistory(MU, 'Nikola Jokic').find((r) => r.id === 12).fg, null)
+
+// Friction: both men are named, so the lookup works from either end, and the other one
+// is who comes back.
+const FR = { season: '2025-26', pairs: [
+  { a: 1, a_name: 'Nikola Jokić', b: 2, b_name: 'Draymond Green', n: 2, kinds: { flagrant: 1, 'double technical': 1 }, last: '2026-03-04' },
+  { a: 3, a_name: 'Somebody', b: 4, b_name: 'Another', n: 1, kinds: { flagrant: 1 }, last: '2026-01-01' },
+] }
+assert.deepEqual(P.frictionFor(FR, 'Nikola Jokic').map((r) => r.name), ['Draymond Green'])
+assert.deepEqual(P.frictionFor(FR, 'Draymond Green').map((r) => r.name), ['Nikola Jokić'])
+assert.deepEqual(P.frictionFor(FR, 'Nobody'), [])
+assert.deepEqual(P.frictionFor(null, 'Nikola Jokic'), [])
+// Repeat offenders first: once is an accident, twice is the thing worth reading.
+assert.equal(P.frictionFor({ pairs: [...FR.pairs, { a: 1, a_name: 'Nikola Jokić', b: 9, b_name: 'Once Only', n: 1, kinds: { flagrant: 1 }, last: '2026-02-01' }] }, 'Nikola Jokic')[0].n, 2)
+
+console.log('matchup and friction checks pass')

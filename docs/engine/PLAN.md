@@ -1,6 +1,6 @@
 # Courtside engine — plan
 
-Written 2026-10-19. Phases 1 to 5 are built; 6 onward is still a plan.
+Written 2026-10-19. Phases 1 to 6 are built; 7 and 8 are still a plan.
 
 Two jobs, in this order:
 
@@ -128,13 +128,19 @@ minutes budget are the fix, and that is when a simulation earns its keep.
 **Historical matchups, and whether two players hate each other.** `nba_api` has the raw
 material and this is the genuinely novel part:
 
-- `leagueseasonmatchups` / `matchupsrollup` / `boxscorematchupsv3` — possession-level defender
-  vs scorer. "Your man has shot 31% against this defender over 140 possessions" is real,
-  checkable, and nothing in ESPN tells you.
-- `playervsplayer`, `teamvsplayer`, `teamandplayersvsplayers` — career head-to-head splits.
-- `playbyplayv3` — technical fouls, flagrants and ejections, with both players named. Count
-  the pairs that keep showing up together and you have an actual friction table, not a vibe.
-  Pair it with news coverage of the same two names and you can tell a grudge from a coincidence.
+- `leagueseasonmatchups` — possession-level defender vs scorer. **Built.** One call, about
+  150,000 pairs, cut to the 5,600 that rest on 30 possessions or more and then to each
+  scorer's eight most frequent defenders. The panel shows points per 100 possessions and
+  field-goal percentage against each man, with the ones he actually meets this week sorted
+  to the top and marked. `matchupsrollup` and `boxscorematchupsv3` were not needed.
+- `playbyplayv3` — flagrants and technicals. **Built**, with one correction to the original
+  plan: a single technical does **not** name both players. The free throw that follows is
+  shot by whoever the other team nominates, so it says nothing about who the argument was
+  with. Only two events pair honestly: a flagrant, where the man fouled shoots the free
+  throws himself at the same clock, and a double technical, where two whistles land on the
+  same moment against opposite teams. Single technicals are counted, never paired.
+- `playervsplayer`, `teamvsplayer` — career head-to-head splits. Skipped. The season-level
+  matchup data already answers the question and costs one call instead of one per player.
 
 **How teams stack up.** `leaguedashptteamdefend` and `leaguedashteamstats` give pace, defensive
 rating and what each team gives up by position. That is the opponent adjustment in step 2, and
@@ -168,7 +174,7 @@ Each one ships on its own and is useful alone.
 | 3 | **Done.** `mean_fp` / `sd_fp` / `p_play` per player, in `src/lib/predict.js` | The first real projection |
 | 4 | **Done.** Win probability and the breakdown on **This week** | The number you asked for |
 | 5 | **Done.** Defence-vs-position, in `public/data/dvp.json` and `opponentFactor` | Sharpens step 3 |
-| 6 | Matchup history and the friction table | The detail nobody else has |
+| 6 | **Done.** Matchup history and the friction table, in the player panel | The detail nobody else has |
 | 7 | Event feed: injuries, legal, suspensions → `p_play` | Catches the week-wreckers |
 | 8 | Calibration page: what the model said vs what happened | Proves, or disproves, the whole thing |
 
@@ -206,3 +212,17 @@ Settled 2026-10-19, phase 5:
    and a table built on forty possessions will tell you anything you want to hear. Against
    last season's logs the extremes came out Boston and Detroit hardest, Washington and Utah
    softest, which is the right answer and a sign the table is reading real defence.
+
+Settled 2026-10-19, phase 6:
+
+9. **The friction table feeds nothing.** It is read, not priced. Two flagrants between the
+   same men is a fact; what it means for Thursday is a judgement, and a model that claimed
+   to quantify it would make every number downstream dishonest — the same reasoning that
+   keeps divorce out of the engine. The panel says so on its face.
+10. **Play-by-play is pulled once and stored.** A thousand games at a second each is twenty
+   minutes, so `pbp` writes to SQLite as it goes, records which games it has read, and picks
+   up where it stopped. Re-running it after a night of basketball costs a few seconds. It is
+   deliberately **not** part of `all` for that reason.
+11. **Defenders carry the team they are on now**, not the team they were on when the
+   possessions happened. Without that the table is trivia; with it the app can mark the men
+   he actually runs into this week.

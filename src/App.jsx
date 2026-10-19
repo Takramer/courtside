@@ -50,6 +50,8 @@ export default function App() {
   const ndata = useFetch('/api/news')
   const fdata = useFetch('/data/form.json') // written by worker/ingest.py; absent until it has run
   const ddata = useFetch('/data/dvp.json')  // same worker: what each team gives up by position
+  const mdata = useFetch('/data/matchups.json') // defender vs scorer, possession by possession
+  const xdata = useFetch('/data/friction.json') // flagrants and double technicals, both men named
   // v3: the real ESPN slots (PF/C, two UT) replace the old three-UT guess; a new key drops the settings saved under it
   const [settings, setSettings] = useLocal('cs.settings.v3', DEFAULT_SETTINGS)
   const [mine, setMine] = useLocal('cs.mine', [])
@@ -148,7 +150,7 @@ export default function App() {
 
   const ctx = {
     isFree, exactTaken, espn, setEspn, league, linked,
-    players, byId, teams, values, formBy, formUpdated: fdata.data?.updated, formCurrent: !!fdata.data?.is_current_season, dvp: ddata.data, dvpUpdated: ddata.data?.updated, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
+    players, byId, teams, values, formBy, formUpdated: fdata.data?.updated, formCurrent: !!fdata.data?.is_current_season, dvp: ddata.data, dvpUpdated: ddata.data?.updated, matchups: mdata.data, friction: xdata.data, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
     newsBy, injuryBy, status, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
     myPlayers: mine.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => (values.get(b.id)?.val ?? -99) - (values.get(a.id)?.val ?? -99)),
   }
