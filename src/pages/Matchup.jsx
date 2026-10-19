@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import { etToday, gameOn, gamesBetween, weekBounds } from '../lib/model.js'
-import { projectPlayer, weekOutlook } from '../lib/predict.js'
+import { opponentFactor, projectPlayer, weekOutlook } from '../lib/predict.js'
 import { Tip, fmt } from '../components.jsx'
 import { useMatchup } from '../lib/espn.js'
 import './matchup.css'
@@ -47,7 +47,7 @@ function Side({ ctx, side, today, label }) {
 }
 
 // Turn one side of the ESPN matchup into something predict.js can price: a projection per
-// player, and how many games he has left before Sunday.
+// player, how many games he has left before Sunday, and who he draws in each of them.
 function priceSide(ctx, side, today, weekEnd, currentSeason) {
   const out = []
   let unknown = 0
@@ -60,7 +60,13 @@ function priceSide(ctx, side, today, weekEnd, currentSeason) {
       : ['DAY_TO_DAY', 'QUESTIONABLE', 'DOUBTFUL'].includes(p.inj) ? 'dtd'
         : known ? ctx.status(known) : 'ok'
     const proj = projectPlayer({ espnFp, form, status, current: currentSeason })
-    out.push({ id: p.id, name: p.name, ...proj, games: gamesBetween(ctx.teams[p.team], today, weekEnd).length })
+    const games = gamesBetween(ctx.teams[p.team], today, weekEnd)
+    // One multiplier per night, in date order: a week against Washington is not a week
+    // against Boston. Without the table every night counts at face value, as before.
+    const adj = ctx.dvp
+      ? games.map((g) => opponentFactor(ctx.dvp, ctx.teams[g.opp]?.abbrev, known?.pos || []))
+      : null
+    out.push({ id: p.id, name: p.name, ...proj, games: games.length, adj })
   }
   return { players: out, unknown }
 }
@@ -82,7 +88,7 @@ export default function Matchup({ ctx }) {
     // Days left in the fantasy week, today included: the lineup cap is per day, not per week.
     const daysLeft = Math.max(1, Math.round((new Date(`${weekEnd}T12:00:00Z`) - new Date(`${today}T12:00:00Z`)) / 86400000) + 1)
     return { ...weekOutlook(mine.players, theirs.players, { starts: slots.length, days: daysLeft }), unknown: mine.unknown + theirs.unknown }
-  }, [d, ctx.players, ctx.formBy, today, weekEnd, currentSeason, slots.length])
+  }, [d, ctx.players, ctx.formBy, ctx.dvp, today, weekEnd, currentSeason, slots.length])
 
   if (!ctx.espn.league || !ctx.espn.team) {
     return (
@@ -133,7 +139,7 @@ export default function Matchup({ ctx }) {
             {' '}Week {d.matchupPeriod}, day {d.scoringPeriod}.
           </p>
 
-          {odds && <Odds odds={odds} updated={ctx.formUpdated} />}
+          {odds && <Odds odds={odds} updated={ctx.formUpdated} dvp={ctx.dvp} />}
           <div className="sides">
             <Side ctx={ctx} side={d.me} today={today} label="Your day" />
             <Side ctx={ctx} side={d.opp} today={today} label={`${d.opp.name}'s day`} />
@@ -147,8 +153,8 @@ export default function Matchup({ ctx }) {
 const pct = (x) => `${Math.round(x * 100)}%`
 
 // The odds, and the four things worth knowing about them.
-function Odds({ odds, updated }) {
-  const { pWin, me, opp, gameEdge, swing, danger } = odds
+function Odds({ odds, updated, dvp }) {
+  const { pWin, me, opp, gameEdge, swing, danger, matchupEdge } = odds
   const verdict = pWin > 0.8 ? 'You should win this'
     : pWin > 0.6 ? 'You are favoured'
       : pWin > 0.4 ? 'This is a coin flip'
@@ -172,6 +178,15 @@ function Odds({ odds, updated }) {
         <li><b>{fmt(opp.mu, 0)}</b> <span>his, give or take {fmt(opp.sd, 0)}</span></li>
         <li><b>{gameEdge > 0 ? `+${gameEdge}` : gameEdge}</b> <span>games played edge: {me.games} left against {opp.games}</span></li>
         {danger && <li><b>{fmt(danger.mu, 0)}</b> <span>his biggest threat: {danger.name}, over {danger.games} {danger.games === 1 ? 'game' : 'games'}</span></li>}
+        {matchupEdge != null && (
+          <li>
+            <b>{matchupEdge > 0 ? `+${fmt(matchupEdge, 1)}` : fmt(matchupEdge, 1)}</b>
+            <span>
+              <Tip text="Your total with the defences your players actually draw this week, minus the same total against an average defence. Guards, forwards and centres are priced separately.">from who you draw</Tip>
+              {' '}this week, against an average week
+            </span>
+          </li>
+        )}
       </ul>
 
       {swing.length > 0 && (
@@ -197,7 +212,8 @@ function Odds({ odds, updated }) {
       )}
 
       <small className="oddsnote">
-        Built on form from {updated ? new Date(updated).toLocaleDateString() : 'the last worker run'}.
+        Built on form from {updated ? new Date(updated).toLocaleDateString() : 'the last worker run'}
+        {dvp ? `, and on ${dvp.season} defence by position` : ', with no defence table yet'}.
         Player nights are treated as independent, which they are not quite — teammates share a
         ball — so the extremes are a little overconfident. Nothing here is graded yet: that is
         the next thing worth building, and until it exists treat the number as an argument,
