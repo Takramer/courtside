@@ -52,17 +52,22 @@ async function espnHeadlines() {
 }
 
 // Per-player search: recent press about the player, on and off the court.
-async function googleNews(name) {
+async function googleNews(name, limit = 25) {
   const q = encodeURIComponent(`"${name}" NBA`)
   const r = await fetch(`https://news.google.com/rss/search?q=${q}+when:14d&hl=en-US&gl=US&ceid=US:en`)
   if (!r.ok) return []
   const xml = await r.text()
-  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 25).map(([, it]) => {
+  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, limit).map(([, it]) => {
     const title = tag(it, 'title')
     const outlet = tag(it, 'source')
     return { name, title: title.replace(` - ${outlet}`, ''), body: '', date: new Date(tag(it, 'pubDate')).toISOString(), link: tag(it, 'link'), src: outlet || 'Google News' }
   })
 }
+
+// Phase 7: the same search across a roster in one call, so off-court news reaches the app
+// without the user having to suspect someone first. Capped and cached — thirteen RSS fetches
+// is a second or two, and a hundred would be a different thing.
+const SWEEP_MAX = 15
 
 export default async function handler(req, res) {
   const player = String(req.query?.player || '').slice(0, 60)
@@ -70,6 +75,21 @@ export default async function handler(req, res) {
     const items = await googleNews(player).catch(() => [])
     res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600')
     return res.status(200).json({ news: items })
+  }
+
+  const sweep = String(req.query?.players || '').split('|').map((x) => x.trim()).filter(Boolean).slice(0, SWEEP_MAX)
+  if (sweep.length) {
+    // Ten each, not twenty-five. The sweep exists to catch an event, not to be read.
+    const got = await Promise.allSettled(sweep.map((n) => googleNews(n, 10)))
+    res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600')
+    return res.status(200).json({
+      updated: new Date().toISOString(),
+      asked: sweep.length,
+      // One flat list; each item already carries the name it was searched under, which is
+      // how the app joins it back to a player.
+      news: got.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    })
   }
   const [rw, espn, inj] = await Promise.allSettled([rotowire(), espnHeadlines(), injuries()])
   const ok = (r) => (r.status === 'fulfilled' ? r.value : [])

@@ -258,3 +258,85 @@ export function frictionFor(friction, playerName) {
   }
   return out.sort((x, y) => y.n - x.n)
 }
+
+// ---------------------------------------------------------------- phase 7: the event feed
+
+// Tags that are allowed to move p_play, and tags that are only ever shown.
+//
+// The line between them is whether the event states something about availability on its
+// own. "Ruled out" and "suspended five games" do: they are the league or the team saying
+// he will not be on the floor, and pricing them is arithmetic. An arrest, a lawsuit, a
+// bereavement, a divorce do not. They raise the chance of missed games by an amount nobody
+// can honestly name, and a number invented for them would quietly contaminate the win
+// probability, the swing table and every waiver suggestion downstream. So they are tagged,
+// dated, and put in front of you with the reasoning left where it belongs.
+export const PRICED_TAGS = ['out', 'suspended']
+export const SHOWN_TAGS = ['legal', 'personal']
+
+const HARD_OUT = ['OUT', 'INJURY_RESERVE', 'SUSPENSION']
+const HARD_DTD = ['DAY_TO_DAY', 'QUESTIONABLE', 'DOUBTFUL']
+const hasTag = (item, k) => (item.tags || []).some((t) => (t.k ?? t) === k)
+
+/**
+ * Whether he plays, and what said so.
+ *
+ * One function because there were two, and they had already drifted: the matchup page read
+ * the fantasy flag and the rest of the app read the injury report, so the same player could
+ * be out on one screen and fine on another. Everything that needs a status calls this.
+ *
+ * Sources in order of authority:
+ *   1. ESPN's own fantasy flag — out, injured reserve, suspended
+ *   2. the official injury report
+ *   3. the news feed, which is routinely hours ahead of both
+ *
+ * A hard flag is never overridden by news. Being wrongly cautious costs a bench slot;
+ * being wrongly optimistic costs the week, and those are not the same mistake.
+ *
+ * `news` items are the app's own tagged items: { title, date, src, tags }.
+ *
+ * `offCourt` is the wider press sweep, and it is held to a lower privilege on purpose: it
+ * can raise a flag but it can never bench anyone. General news headlines are written to be
+ * read, not parsed — "ruled out of the MVP race" and "suspended disbelief" both carry the
+ * words that would zero a projection, and the cost of that mistake is the whole week.
+ * Pricing stays with the feeds that are written about availability.
+ */
+export function availability({ inj, report, news = [], offCourt = [], now = Date.now(), freshHours = 36, flagDays = 7 } = {}) {
+  const fresh = (item, hours) => {
+    const t = Date.parse(item?.date ?? '')
+    return Number.isNaN(t) ? false : t >= now - hours * 3600e3
+  }
+
+  // Off-court events worth reading, priced at nothing on purpose.
+  const flags = []
+  for (const item of [...news, ...offCourt]) {
+    if (!fresh(item, flagDays * 24)) continue
+    for (const k of SHOWN_TAGS) {
+      if (hasTag(item, k)) flags.push({ tag: k, title: item.title, date: item.date, src: item.src })
+    }
+  }
+  const out = (why, source) => ({ status: 'out', why, source, flags })
+  const dtd = (why, source) => ({ status: 'dtd', why, source, flags })
+
+  if (HARD_OUT.includes(inj)) {
+    return out(inj === 'SUSPENSION' ? 'Suspended' : inj === 'INJURY_RESERVE' ? 'On injured reserve' : 'Ruled out', 'ESPN')
+  }
+  if (report?.status === 'Out') return out(report.comment || 'Ruled out', 'injury report')
+
+  for (const item of news) {
+    if (!fresh(item, freshHours)) continue
+    // "Returns from suspension Friday" carries the word that would otherwise bench him.
+    // The return is the newer fact, so it cancels the item's own out signal.
+    if (hasTag(item, 'roleup')) continue
+    const hit = PRICED_TAGS.find((k) => hasTag(item, k))
+    if (hit) return out(item.title, item.src || 'news')
+  }
+
+  if (HARD_DTD.includes(inj)) return dtd('Game-time decision', 'ESPN')
+  if (report?.status === 'Day-To-Day') return dtd(report.comment || 'Day-to-day', 'injury report')
+  for (const item of news) {
+    if (fresh(item, freshHours) && !hasTag(item, 'roleup') && hasTag(item, 'questionable')) {
+      return dtd(item.title, item.src || 'news')
+    }
+  }
+  return { status: 'ok', why: null, source: null, flags }
+}

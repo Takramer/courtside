@@ -293,7 +293,13 @@ export const NEWS_TAGS = [
   { k: 'longterm', label: 'Long-term', tone: 'bad', re: /\b(surgery|season-ending|torn|fracture|weeks|months|indefinitely|reevaluated in)\b/i, why: 'Absence measured in weeks. A roster spot spent on him scores nothing until he returns.' },
   { k: 'injury', label: 'Injury', tone: 'warn', re: /\b(injur|sprain|strain|sore|contusion|concussion|tendin|bruise|knee|ankle|hamstring|achilles|groin|calf|back spasm|illness|sick)/i, why: 'Health issue. Check status before each game.' },
   { k: 'questionable', label: 'Game-time call', tone: 'warn', re: /\b(questionable|doubtful|game-time decision|day-to-day|probable)\b/i, why: 'Might sit. Re-check about an hour before tip-off.' },
-  { k: 'personal', label: 'Off-court', tone: 'warn', re: /\b(personal reasons|personal matter|family|bereavement|birth of|paternity|legal|arrest|lawsuit|suspend|investigation|conduct|away from the team|mental health)\b/i, why: 'Off-court news. Can mean missed games with no clear return date.' },
+  // Split out of the old catch-all 'personal' tag in phase 7, because the three behave
+  // differently: a suspension is a stated number of games and prices like an injury, while
+  // a court date and a bereavement are surfaced and never priced. Lumping them together
+  // meant either pricing a divorce or ignoring a suspension.
+  { k: 'suspended', label: 'Suspended', tone: 'bad', re: /\b(suspend(ed|s)?|suspension|banned for)\b/i, why: 'Barred from playing. Scores nothing until it is served.' },
+  { k: 'legal', label: 'Legal', tone: 'warn', re: /\b(arrest(ed)?|charged|charges|indict(ed|ment)|lawsuit|sued|investigation|police|custody|pleaded|court date|trial)\b/i, why: 'Legal trouble. It can end in missed games, but nothing here says it will — read it and judge.' },
+  { k: 'personal', label: 'Off-court', tone: 'warn', re: /\b(personal reasons|personal matter|family|bereavement|birth of|paternity|conduct|away from the team|mental health|divorce)\b/i, why: 'Off-court news. Can mean missed games with no clear return date.' },
   { k: 'restrict', label: 'Minutes limit', tone: 'warn', re: /\b(minutes restriction|minutes limit|limited minutes|load management|rest(ed|ing)\b|night off|ramp(ing)? up)/i, why: 'Less playing time means fewer stats even when he plays.' },
   { k: 'roleup', label: 'Bigger role', tone: 'good', re: /\b(will start|starting lineup|start(s|ed)? in place|promoted|expanded role|increased role|more minutes|cleared|returns?|back in the lineup|available)\b/i, why: 'More playing time ahead. Worth a look on waivers.' },
   { k: 'move', label: 'Moved', tone: 'info', re: /\b(traded|acquired|waived|released|sign(ed|s) (a|with)|claimed)\b/i, why: 'New team or contract. His role can change in either direction.' },

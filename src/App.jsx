@@ -3,6 +3,7 @@ import { useFetch, useLocal } from './lib/store.js'
 import { useEspnLeague } from './lib/espn.js'
 import { clearToken, tokenInUrl, unpack } from './lib/link.js'
 import { computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, normName, tagNews } from './lib/model.js'
+import { availability } from './lib/predict.js'
 import { Toaster, toast } from 'sonner'
 import { PlayerDrawer, PlayerFinder } from './components.jsx'
 import Team from './pages/Team.jsx'
@@ -117,6 +118,27 @@ export default function App() {
     return { newsBy, injuryBy }
   }, [ndata.data, players, byId])
 
+  // Phase 7: the wider press, swept across the roster in one call so an off-court event
+  // reaches the app without you having to suspect someone first. Roster-sized, cached
+  // server-side for fifteen minutes, and the URL is stable so it fetches once per roster
+  // rather than on every render.
+  const sweepUrl = useMemo(() => {
+    const names = mine.map((id) => byId.get(id)?.name).filter(Boolean).sort()
+    return names.length ? `/api/news?players=${encodeURIComponent(names.join('|'))}` : null
+  }, [mine, byId])
+  const sdata = useFetch(sweepUrl)
+  const offCourtBy = useMemo(() => {
+    const by = new Map()
+    for (const n of sdata.data?.news || []) {
+      const item = { ...n, tags: tagNews(`${n.title} ${n.body || ''}`) }
+      if (!item.tags.length) continue
+      const key = normName(n.name)
+      if (!by.has(key)) by.set(key, [])
+      by.get(key).push(item)
+    }
+    return new Map(players.map((p) => [p.id, by.get(normName(p.name))]).filter(([, v]) => v))
+  }, [sdata.data, players])
+
   // Game-to-game spread per player, joined on the same normalised name the news uses.
   const formBy = useMemo(() => {
     const by = new Map()
@@ -125,12 +147,13 @@ export default function App() {
   }, [fdata.data, players])
 
   const mineSet = new Set(mine); const takenSet = new Set(taken)
-  const status = (p) => {
-    const rep = injuryBy.get(p.id)?.status
-    if (rep === 'Out' || p.inj === 'OUT' || p.inj === 'SUSPENSION' || p.inj === 'INJURY_RESERVE') return 'out'
-    if (rep === 'Day-To-Day' || ['DAY_TO_DAY', 'QUESTIONABLE', 'DOUBTFUL'].includes(p.inj)) return 'dtd'
-    return 'ok'
-  }
+  // One resolver for the whole app (phase 7). It was two, and they had drifted: the matchup
+  // page read the fantasy flag while everything else read the injury report, so a player
+  // could be out on one screen and fine on the next.
+  const avail = (p) => availability({
+    inj: p.inj, report: injuryBy.get(p.id), news: newsBy.get(p.id), offCourt: offCourtBy.get(p.id),
+  })
+  const status = (p) => avail(p).status
   const setOwner = (id, who) => {
     setMine((m) => (who === 'mine' ? [...new Set([...m, id])] : m.filter((x) => x !== id)))
     setTaken((t) => (who === 'taken' ? [...new Set([...t, id])] : t.filter((x) => x !== id)))
@@ -151,7 +174,7 @@ export default function App() {
   const ctx = {
     isFree, exactTaken, espn, setEspn, league, linked,
     players, byId, teams, values, formBy, formUpdated: fdata.data?.updated, formCurrent: !!fdata.data?.is_current_season, dvp: ddata.data, dvpUpdated: ddata.data?.updated, matchups: mdata.data, friction: xdata.data, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
-    newsBy, injuryBy, status, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
+    newsBy, injuryBy, offCourtBy, status, avail, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
     myPlayers: mine.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => (values.get(b.id)?.val ?? -99) - (values.get(a.id)?.val ?? -99)),
   }
   const Page = (TABS.find((t) => t[0] === tab) || TABS[0])[2]

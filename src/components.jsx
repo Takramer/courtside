@@ -15,11 +15,24 @@ export function Tip({ children, text }) {
 }
 
 export function StatusBadge({ ctx, p }) {
-  const st = ctx.status(p)
-  if (st === 'ok') return null
-  const rep = ctx.injuryBy.get(p.id)
-  const label = st === 'out' ? (p.inj === 'SUSPENSION' ? 'SUSP' : 'OUT') : 'GTD'
-  return <Tip text={rep?.comment || `ESPN status: ${p.inj.replace(/_/g, ' ').toLowerCase()}`}><span className={`badge ${st}`}>{label}</span></Tip>
+  const { status, why, source } = ctx.avail(p)
+  if (status === 'ok') return null
+  const label = status === 'out' ? (p.inj === 'SUSPENSION' ? 'SUSP' : 'OUT') : 'GTD'
+  // Say what decided it, not just that something did. "RotoWire: ruled out Thursday" is
+  // checkable in a way that a bare badge is not.
+  const text = why ? `${source}: ${why}` : `ESPN status: ${String(p.inj || '').replace(/_/g, ' ').toLowerCase()}`
+  return <Tip text={text}><span className={`badge ${status}`}>{label}</span></Tip>
+}
+
+// Off-court events, marked and never priced. The badge is deliberately quiet and the
+// tooltip says outright that it moves no number: the moment a grudge or a court date
+// starts nudging a projection, every number downstream stops meaning what it says.
+export function FlagBadge({ ctx, p }) {
+  const { flags } = ctx.avail(p)
+  if (!flags.length) return null
+  const kinds = [...new Set(flags.map((f) => f.tag))]
+  const text = `${flags.map((f) => f.title).join(' · ')} — surfaced, not priced: this changes no projection in the app.`
+  return <Tip text={text}><span className="badge flag">{kinds.includes('legal') ? 'LEGAL' : 'OFF-COURT'}</span></Tip>
 }
 
 export function PlayerName({ ctx, p, sub = true }) {
@@ -208,7 +221,7 @@ export function PlayerDrawer({ ctx, p, onClose }) {
       <aside className="drawer" ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="drawer-title" onClick={(e) => e.stopPropagation()}>
         <header className="dhead">
           <div className="dtitle">
-            <h2 id="drawer-title">{p.name} <StatusBadge ctx={ctx} p={p} /></h2>
+            <h2 id="drawer-title">{p.name} <StatusBadge ctx={ctx} p={p} /> <FlagBadge ctx={ctx} p={p} /></h2>
             <div className="muted">{ctx.teams[p.team]?.name || 'Free agent'} · {p.pos.join('/')}</div>
           </div>
           <button className="x" onClick={onClose} aria-label="Close player panel">
