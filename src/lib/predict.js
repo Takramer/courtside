@@ -76,15 +76,49 @@ export function playerDay({ mean, sd, pPlay }) {
   return { mu, variance: Math.max(0, variance) }
 }
 
+// ---------------------------------------------------------------- the opponent
+
+// ESPN and the NBA disagree about six abbreviations. The schedule in the app is ESPN's;
+// dvp.json comes from the NBA feed. This is the only place the two namespaces meet.
+const NBA_ABBREV = { GS: 'GSW', NO: 'NOP', NY: 'NYK', SA: 'SAS', UTAH: 'UTA', WSH: 'WAS' }
+
+// Guard, forward, centre — no finer. Split it to five and most team-position cells rest on
+// too few games to mean anything, and the table starts inventing differences.
+const BUCKET = { PG: 'G', SG: 'G', SF: 'F', PF: 'F', C: 'C' }
+
+/**
+ * How much one opponent moves a player's night, as a multiplier on his average.
+ *
+ * 1.00 whenever we cannot say: no table yet, an unknown team, a player with no position.
+ * That is deliberate — an unknown adjustment should leave the projection exactly where it
+ * was rather than quietly dropping the player out of it. A player eligible at two positions
+ * gets the average of the two, because the defence does not know which one he is listed at.
+ */
+export function opponentFactor(dvp, oppAbbrev, positions = []) {
+  const team = dvp?.teams?.[NBA_ABBREV[oppAbbrev] ?? oppAbbrev]
+  if (!team) return 1
+  const mults = [...new Set(positions.map((x) => BUCKET[x]).filter(Boolean))]
+    .map((b) => team[b]?.mult).filter((m) => m != null)
+  if (!mults.length) return 1
+  return mults.reduce((a, b) => a + b, 0) / mults.length
+}
+
 /**
  * A team's week. `players` each carry their projection and how many games they have left;
  * `starts` is how many of them can be in the lineup on a given day, so a day with eleven
  * games still only pays for the slots you have.
  *
  * Players are taken in order of mean, which is the lineup you would set anyway.
+ *
+ * Each player may carry `adj`: one multiplier per remaining game, in date order, from
+ * opponentFactor above. A player facing Washington twice is worth more than the same player
+ * facing Boston twice, and until phase 5 that difference was invisible here. No `adj` means
+ * every game counts at face value, which is exactly what phases 3 and 4 did.
  */
+const meanAdj = (p) => (p.adj?.length ? p.adj.reduce((a, b) => a + b, 0) / p.adj.length : 1)
+
 export function teamWeek(players, { starts = 10, days = 7 } = {}) {
-  const ranked = [...players].sort((a, b) => b.mean * b.pPlay - a.mean * a.pPlay)
+  const ranked = [...players].sort((a, b) => b.mean * b.pPlay * meanAdj(b) - a.mean * a.pPlay * meanAdj(a))
   // You cannot start thirteen men in ten slots. Over the days left there are only so many
   // starts to give, and they go to your best players first — which is what you would do.
   // Without this the bench is counted as though it played, and a deep roster looks better
@@ -94,12 +128,22 @@ export function teamWeek(players, { starts = 10, days = 7 } = {}) {
   let variance = 0
   const perPlayer = []
   for (const p of ranked) {
-    const day = playerDay(p)
     const played = Math.max(0, Math.min(p.games ?? 0, left))
     left -= played
-    mu += day.mu * played
-    variance += day.variance * played
-    perPlayer.push({ ...p, games: played, mu: day.mu * played, variance: day.variance * played })
+    // Night by night, because the opponent changes between them. A defence that holds a
+    // player to 90% holds his spread to 90% too: the whole night shrinks, not just its
+    // middle, so the same factor multiplies mean and sd.
+    let pmu = 0
+    let pvar = 0
+    for (let i = 0; i < played; i++) {
+      const f = p.adj?.[i] ?? 1
+      const day = playerDay({ mean: p.mean * f, sd: p.sd * f, pPlay: p.pPlay })
+      pmu += day.mu
+      pvar += day.variance
+    }
+    mu += pmu
+    variance += pvar
+    perPlayer.push({ ...p, games: played, mu: pmu, variance: pvar })
   }
   return { mu, variance, sd: Math.sqrt(variance), players: perPlayer }
 }
@@ -134,11 +178,18 @@ export function weekOutlook(mine, theirs, opts = {}) {
   const myGames = me.players.reduce((n, p) => n + p.games, 0)
   const oppGames = opp.players.reduce((n, p) => n + p.games, 0)
 
+  // What the opponent adjustment is actually worth to me this week. Without it there is no
+  // way to tell whether the defence table is doing work or just adding decimal places, and
+  // a model you cannot audit from the outside is a model you have to take on faith.
+  const flat = teamWeek(mine.map((p) => ({ ...p, adj: null })), opts)
+  const matchupEdge = mine.some((p) => p.adj?.length) ? +(me.mu - flat.mu).toFixed(1) : null
+
   return {
     pWin,
     me: { mu: +me.mu.toFixed(1), sd: +me.sd.toFixed(1), games: myGames },
     opp: { mu: +opp.mu.toFixed(1), sd: +opp.sd.toFixed(1), games: oppGames },
     gameEdge: myGames - oppGames,
+    matchupEdge,
     swing: swing.slice(0, 5),
     // The one on his side who can beat you by himself: biggest mean, biggest spread.
     danger: [...opp.players].filter((p) => p.games > 0)

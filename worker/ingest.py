@@ -5,7 +5,8 @@ derived artifacts the website reads.
     python ingest.py logs         pull player game logs into courtside.db
     python ingest.py form         recompute rolling form from what is in the db
     python ingest.py export       write ../public/data/form.json for the site
-    python ingest.py all          logs, form, export
+    python ingest.py dvp          defence by position -> ../public/data/dvp.json
+    python ingest.py all          logs, form, export, dvp
 
 Runs on the laptop, not a server: NBA refuses datacenter IPs. See ../docs/engine/SOURCES.md.
 Nothing here touches ESPN — the browser does that, with credentials that stay on your devices.
@@ -34,6 +35,14 @@ LAST_SEASON = "2025-26"
 # currency. ftm 2 / fta -1 is ESPN's "+1 made, -1 missed" written as made/attempted.
 WEIGHTS = {"pts": 1, "tpm": 1, "fgm": 2, "fga": -1, "ftm": 2, "fta": -1,
            "reb": 1, "ast": 2, "stl": 4, "blk": 4, "to": -2}
+
+# Defence by position. Three knobs, all of them deliberately cautious, because defence-vs-
+# position is the noisiest thing in fantasy basketball: half of what looks like a soft defence
+# is a soft schedule, and a table built on forty possessions will tell you anything you want.
+DVP_K = 150        # shrinkage, in player-games. A full season against one team is ~300, so a
+                   # team is still pulled a third of the way back to average by the end of it.
+DVP_CLAMP = 0.12   # no opponent moves a projection by more than this, whatever the table says
+DVP_MIN_MIN = 10   # a garbage-time cameo says nothing about a defence
 
 HEADERS = {
     "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -66,6 +75,11 @@ create table if not exists players (
   team text
 );
 create index if not exists players_norm on players (norm);
+
+create table if not exists player_pos (
+  player_id integer primary key,
+  pos text not null            -- G, F or C: finer than this and the cells are too thin to read
+);
 
 create table if not exists runs (
   job text not null, season text not null, at text not null, rows integer not null
@@ -235,6 +249,124 @@ def job_export():
     return len(rows)
 
 
+# ---------------------------------------------------------------- defence by position
+
+def job_positions(season):
+    """Guard, forward or centre per player. The game log does not carry it, so it comes from
+    playerindex — one call, 500-odd rows."""
+    payload = get("playerindex", {"LeagueID": "00", "Season": season})
+    rows = rows_of(payload)
+    con = db()
+    with con:
+        for r in rows:
+            pos = (r.get("POSITION") or "").strip()
+            if not pos:
+                continue
+            # "G-F" is a guard who swings; the first letter is the one his minutes come from.
+            con.execute("insert or replace into player_pos values (?,?)",
+                        (r["PERSON_ID"], pos[0].upper()))
+    n = con.execute("select count(*) from player_pos").fetchone()[0]
+    print(f"  {season}: positions for {len(rows)} players, {n} known in total")
+    return n
+
+
+def opponent_of(matchup):
+    """'BOS vs. LAL' and 'BOS @ LAL' both end with the other team."""
+    parts = (matchup or "").split()
+    return parts[-1] if len(parts) >= 3 else None
+
+
+def dvp_rows(con, season):
+    """What each team gives up, per position, per 36 minutes on the floor.
+
+    Per 36 rather than per game on purpose. Fantasy points allowed per game mostly measures
+    how many minutes the opposing coach handed out, which is a fact about the other team's
+    rotation, not about this defence. Per 36 asks the narrower question the projection
+    actually needs: against these people, does a minute produce more or less than usual?
+
+    Returned as a multiplier against the league average for that position, shrunk towards 1
+    by how many player-games it rests on and then clipped. A team with no history gets 1.00,
+    which is the right answer rather than a missing one."""
+    pos = dict(con.execute("select player_id, pos from player_pos"))
+    if not pos:
+        return {}, {}, 0
+
+    league = {}   # bucket -> [sum of fp36, n]
+    allowed = {}  # (team, bucket) -> [sum of fp36, n]
+    skipped = 0
+    for pid, matchup, mins, fp in con.execute(
+            "select player_id, matchup, min, fp from player_games"
+            " where season = ? and min >= ?", (season, DVP_MIN_MIN)):
+        bucket = pos.get(pid)
+        opp = opponent_of(matchup)
+        if not bucket or not opp or not mins:
+            skipped += 1
+            continue
+        fp36 = fp / mins * 36
+        for key, store in ((bucket, league), ((opp, bucket), allowed)):
+            cell = store.setdefault(key, [0.0, 0])
+            cell[0] += fp36
+            cell[1] += 1
+
+    base = {b: total / n for b, (total, n) in league.items() if n}
+    teams = {}
+    for (team, bucket), (total, n) in sorted(allowed.items()):
+        mean = total / n
+        ref = base.get(bucket)
+        if not ref:
+            continue
+        # Shrink towards average by sample size, then refuse to let any one cell move a
+        # projection more than DVP_CLAMP whatever it claims.
+        mult = 1 + (mean / ref - 1) * (n / (n + DVP_K))
+        mult = min(1 + DVP_CLAMP, max(1 - DVP_CLAMP, mult))
+        teams.setdefault(team, {})[bucket] = {
+            "mult": round(mult, 4), "fp36": round(mean, 2), "n": n,
+        }
+    return teams, {b: round(v, 2) for b, v in base.items()}, skipped
+
+
+def job_dvp():
+    con = db()
+    for season in (THIS_SEASON, LAST_SEASON):
+        if not con.execute("select 1 from player_games where season = ? limit 1",
+                           (season,)).fetchone():
+            continue
+        job_positions(season)
+        teams, base, skipped = dvp_rows(con, season)
+        if len(teams) < 20:
+            print(f"  {season}: only {len(teams)} teams have enough games; trying the season before")
+            continue
+        path = os.path.join(DATA, "dvp.json")
+        os.makedirs(DATA, exist_ok=True)
+        payload = {
+            "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "season": season,
+            "is_current_season": season == THIS_SEASON,
+            "k": DVP_K, "clamp": DVP_CLAMP, "min_minutes": DVP_MIN_MIN,
+            "note": ("Fantasy points per 36 minutes allowed to guards, forwards and centres, "
+                     "as a multiplier on the league average for that position. Shrunk towards "
+                     "1.00 by sample size and clipped at +/-" f"{int(DVP_CLAMP * 100)}%. "
+                     "Scoring matches form.json. Defence-vs-position is noisy and partly a "
+                     "schedule artefact, which is what the shrinking and the clip are for."),
+            "league_fp36": base,
+            "teams": teams,
+        }
+        with open(path, "w") as f:
+            json.dump(payload, f, separators=(",", ":"))
+        extremes = sorted(((t["G"]["mult"], name) for name, t in teams.items() if "G" in t))
+        print(f"  {season}: {len(teams)} teams, {skipped} rows without a position or opponent")
+        if extremes:
+            print(f"  toughest on guards {extremes[0][1]} {extremes[0][0]}, "
+                  f"softest {extremes[-1][1]} {extremes[-1][0]}")
+        print(f"  wrote {os.path.relpath(path)} — {os.path.getsize(path) // 1024} KB")
+        with con:
+            con.execute("insert into runs values (?,?,?,?)",
+                        ("dvp", season, datetime.now(timezone.utc).isoformat(), len(teams)))
+        return len(teams)
+    print("  no season has enough games for a defence table yet")
+    return 0
+
+
 def check():
     try:
         payload = get("leaguedashptteamdefend", {
@@ -251,7 +383,8 @@ def check():
 JOBS = {"logs": "pull player game logs into courtside.db",
         "form": "recompute rolling mean and spread from the db",
         "export": "write ../public/data/form.json for the website",
-        "all": "logs, then form, then export"}
+        "dvp": "defence by position -> ../public/data/dvp.json",
+        "all": "logs, then form, then export, then dvp"}
 
 
 def main():
@@ -277,6 +410,8 @@ def main():
         job_form()
     if args.job in ("export", "all"):
         job_export()
+    if args.job in ("dvp", "all"):
+        job_dvp()
     print(f"  done in {time.time() - start:.1f}s")
     return 0
 

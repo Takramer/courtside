@@ -122,3 +122,40 @@ const squeeze = P.teamWeek([{ id: 1, name: 'Best', mean: 50, sd: 10, pPlay: 1, g
 assert.equal(squeeze.players.find((p) => p.name === 'Bench').games, 0)
 assert.equal(squeeze.players.find((p) => p.name === 'Best').games, 1)
 assert.ok(Math.abs(squeeze.mu - 80) < 1e-9, 'only the two who start are counted')
+
+// ---------- phase 5: the opponent adjustment ----------
+const DVP = { teams: { WAS: { G: { mult: 1.11 }, F: { mult: 1.11 }, C: { mult: 1.1 } },
+                       BOS: { G: { mult: 0.93 }, F: { mult: 0.92 }, C: { mult: 0.94 } } } }
+
+// No table, an unknown team, or a player with no position: the projection is left alone.
+// A missing adjustment must mean "no change", never "no player".
+assert.equal(P.opponentFactor(null, 'BOS', ['PG']), 1)
+assert.equal(P.opponentFactor(DVP, 'MEM', ['PG']), 1)
+assert.equal(P.opponentFactor(DVP, 'BOS', []), 1)
+// ESPN writes WSH and the NBA writes WAS for the same team. Get this wrong and every
+// Washington game silently prices at average.
+assert.equal(P.opponentFactor(DVP, 'WSH', ['PG']), 1.11)
+assert.equal(P.opponentFactor(DVP, 'BOS', ['PG']), 0.93)
+// Two positions average, because the defence does not know which one he is listed at.
+assert.ok(Math.abs(P.opponentFactor(DVP, 'BOS', ['SG', 'SF']) - 0.925) < 1e-9)
+
+// A week against Washington beats the same week against Boston, and both sit either side of
+// the unadjusted number.
+const player = (adj) => [{ id: 1, name: 'A', mean: 40, sd: 10, pPlay: 1, games: 2, adj }]
+const soft = P.teamWeek(player([1.11, 1.11])).mu
+const hard = P.teamWeek(player([0.93, 0.93])).mu
+const flat = P.teamWeek(player(null)).mu
+assert.ok(Math.abs(flat - 80) < 1e-9, 'no adjustment is the phase 4 answer, unchanged')
+assert.ok(soft > flat && flat > hard)
+assert.ok(Math.abs(soft - 88.8) < 1e-9, `two nights at 1.11: ${soft}`)
+// The spread scales with the mean: a defence that holds a man to 90% holds his ceiling too.
+assert.ok(P.teamWeek(player([1.11, 1.11])).sd > P.teamWeek(player([0.93, 0.93])).sd)
+// Only the games he actually starts are adjusted, so the cap and the table agree.
+assert.equal(P.teamWeek(player([1.11, 1.11]), { starts: 1, days: 1 }).players[0].games, 1)
+
+// matchupEdge is the honest audit: my total with the defences I draw, minus an average week.
+const vsWas = P.weekOutlook(player([1.11, 1.11]), player(null))
+assert.ok(Math.abs(vsWas.matchupEdge - 8.8) < 0.05, `edge is real points: ${vsWas.matchupEdge}`)
+assert.equal(P.weekOutlook(player(null), player(null)).matchupEdge, null, 'no table, no claim')
+
+console.log('predict checks pass')

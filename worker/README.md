@@ -1,23 +1,33 @@
-# Worker — skeleton
+# Worker
 
-Pulls NBA data into Supabase on a schedule. Nothing is wired yet: `ingest.py` lists the plan
-and refuses to run.
+Pulls NBA game logs into `courtside.db` (SQLite, gitignored) and writes the small derived
+files the website reads from `../public/data/`. No database, no Supabase.
 
-The website never calls these sources. It reads Supabase. If the worker is broken or your
-laptop is shut, Courtside still works on ESPN data — just with staler numbers.
+The website never calls these sources. It fetches the JSON off the CDN. If the worker is
+broken or your laptop is shut, Courtside still works on ESPN data — just with staler numbers,
+and with no defence table it prices every night at face value.
 
-## First thing to settle
-
-`stats.nba.com` blocks datacenter IPs. It hung for 60 seconds from the sandbox I work in, and
-`cdn.nba.com` answered 403. Your MacBook is a residential IP, so it should be fine, but that is
-a guess until you run it:
+## Running it
 
 ```bash
-cd worker && python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && python ingest.py --check
+cd worker && . .venv/bin/activate && python ingest.py all
 ```
 
-Prints OK and a row count, or prints what blocked it. Everything in phases 2 and up depends on
-that one answer, so run it before I build any of it.
+`all` is logs, then form, then export, then dvp. Seconds, once the logs are in. The pieces
+run on their own too:
+
+| Job | Writes | What it is |
+|---|---|---|
+| `logs` | `courtside.db` | every player game log, both seasons |
+| `form` | nothing | mean, spread and availability per player, printed |
+| `export` | `../public/data/form.json` | the same, for the site |
+| `dvp` | `../public/data/dvp.json` | fantasy points per 36 allowed, by team and position |
+
+`python ingest.py --check` answers one question: can this machine reach `stats.nba.com`? NBA
+blocks most datacenter IPs; a residential connection is fine.
+
+Both JSON files are committed, so new numbers reach the site by deploy rather than instantly.
+That is the trade for having no database, and for a nightly job it is not much of one.
 
 ## Where it will run
 
@@ -31,10 +41,10 @@ residential proxy, which costs money and is the only part of this plan that does
 `worker/.env`, never committed, never read by me:
 
 ```
-SUPABASE_URL=
-SUPABASE_SERVICE_KEY=     # service key: this is the only thing that writes the warehouse
-ODDS_API_KEY=             # optional, phase 5
+ODDS_API_KEY=             # optional, unused: game lines, as a sanity check on a projection
 ```
+
+Nothing the worker does today needs a key. `stats.nba.com` wants none.
 
 No ESPN cookies here. The worker has no business touching your ESPN account — the browser
 already does that, with credentials that stay on your devices.

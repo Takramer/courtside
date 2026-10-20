@@ -1,6 +1,6 @@
 # Courtside engine — plan
 
-Written 2026-10-19. Phases 1 to 4 are built and deployed; 5 onward is still a plan.
+Written 2026-10-19. Phases 1 to 5 are built; 6 onward is still a plan.
 
 Two jobs, in this order:
 
@@ -63,15 +63,17 @@ new data arrives by deploy rather than instantly, which for a nightly job is not
 ### Shape
 
 ```
-  nba_api / ESPN / GDELT / odds          Supabase                  the website
-  ───────────────────────────────        ─────────                 ───────────
-  worker (Python, scheduled)   ──────▶   warehouse tables  ──────▶  reads only
-  pulls, normalises, scores              + your app state           never calls the
-                                                                    slow sources itself
+  nba_api / ESPN / GDELT / odds        courtside.db + data/*.json    the website
+  ───────────────────────────────      ─────────────────────────    ───────────
+  worker (Python, nightly)   ──────▶   SQLite, gitignored     ──────▶  reads only
+  pulls, normalises, scores            small JSON, committed         never calls the
+                                                                     slow sources itself
 ```
 
-The website never waits on a slow source. The worker fills Supabase on a schedule; the pages
-read rows. If the worker dies, the site keeps working on ESPN data, just with staler numbers.
+The website never waits on a slow source. The worker writes the files on a schedule; the pages
+fetch them off the CDN. If the worker dies, the site keeps working on ESPN data, just with
+staler numbers — and with no defence table it prices every night at face value, which is
+exactly what it did before phase 5.
 
 **The worker runs on the MacBook.** `stats.nba.com` refuses the sandbox I work in — a
 60-second hang, 403 from the CDN — but answers your machine fine: all five endpoints the engine
@@ -165,7 +167,7 @@ Each one ships on its own and is useful alone.
 | 2 | **Done.** Worker pulls game logs to SQLite, writes `public/data/form.json` | Everything downstream needs the game log |
 | 3 | **Done.** `mean_fp` / `sd_fp` / `p_play` per player, in `src/lib/predict.js` | The first real projection |
 | 4 | **Done.** Win probability and the breakdown on **This week** | The number you asked for |
-| 5 | Defence-vs-position and the opponent adjustment | Sharpens step 3 |
+| 5 | **Done.** Defence-vs-position, in `public/data/dvp.json` and `opponentFactor` | Sharpens step 3 |
 | 6 | Matchup history and the friction table | The detail nobody else has |
 | 7 | Event feed: injuries, legal, suspensions → `p_play` | Catches the week-wreckers |
 | 8 | Calibration page: what the model said vs what happened | Proves, or disproves, the whole thing |
@@ -187,4 +189,20 @@ Settled 2026-10-19:
 
 Still open:
 
-5. **The Odds API key** — optional, phase 5, one email to register. Nothing else needs a key.
+5. **The Odds API key** — optional, one email to register. Phase 5 shipped without it: the
+   defence table is built from the game logs already in `courtside.db`, so no new key was
+   needed. Vegas totals would still be the best sanity check on a projection if you want one.
+
+Settled 2026-10-19, phase 5:
+
+6. **Defence is measured per 36 minutes, not per game.** Fantasy points allowed per game
+   mostly measures how many minutes the opposing coach handed out, which is a fact about
+   their rotation rather than about this defence. Per 36 asks the narrower question the
+   projection needs: against these people, is a minute worth more or less than usual?
+7. **Guard / forward / centre, not five positions.** Split it finer and most team-position
+   cells rest on too few games to read.
+8. **Shrunk, then clipped.** Each cell is pulled towards 1.00 by sample size (K = 150
+   player-games) and then clipped at ±12%. Defence-vs-position is half schedule artefact,
+   and a table built on forty possessions will tell you anything you want to hear. Against
+   last season's logs the extremes came out Boston and Detroit hardest, Washington and Utah
+   softest, which is the right answer and a sign the table is reading real defence.
