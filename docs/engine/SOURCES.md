@@ -47,7 +47,20 @@ Fallbacks, if NBA ever locks the door: a residential proxy (costs money), or scr
 
 | Source | Limit | Gives |
 |---|---|---|
-| [GDELT DOC API](https://api.gdeltproject.org/api/v2/doc/doc) | 1 request / 5 seconds, no key | Worldwide news by name with a tone score. The arrest/legal/personal feed. Returned a rate-limit notice when I hammered it, which is itself proof it is up and keyless. Coverage is media mentions, not verified facts — treat it as a lead, never a conclusion. |
+| [GDELT DOC API](https://api.gdeltproject.org/api/v2/doc/doc) | **not usable from here** — see below | Worldwide news by name with a tone score. Was going to be the arrest/legal feed. |
+
+**Correction, 2026-10-19 (phase 7).** The earlier note read GDELT's rate-limit message as
+proof the API was healthy. It is not. Measured from this machine: a single cold request,
+with no GDELT traffic from me for minutes beforehand, returns HTTP 429. After a 70-second
+gap one request answered 200; the next, 20 seconds later, was 429 again. So the documented
+"one request every 5 seconds" is not what the service enforces for this address, and a
+sweep over 250 players would take hours rather than 20 minutes. A Vercel function would
+fare worse, sharing a datacenter address with every other tenant in the region.
+
+Google News RSS covers the same ground — local and non-sports outlets included — answers
+every time, and is already wired into `api/news.js`. Phase 7 uses it instead, and the
+roster sweep (`/api/news?players=A|B|C`) is built on it. GDELT stays here as a note, not a
+dependency.
 
 ## Worth a key, free tier
 

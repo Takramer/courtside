@@ -30,6 +30,50 @@ export function PlayerSearch({ ctx, onPick, filter = () => true, placeholder = '
   )
 }
 
+// What has happened to this roster lately, in one place. Two kinds, kept apart on purpose:
+// the ones that have already changed a projection, and the ones that are only here to be
+// read. Mixing them would hide which numbers moved.
+function Events({ ctx, myPlayers }) {
+  const rows = myPlayers.map((p) => ({ p, ...ctx.avail(p) })).filter((r) => r.status !== 'ok' || r.flags.length)
+  if (!rows.length) return null
+  const priced = rows.filter((r) => r.status !== 'ok')
+  const read = rows.filter((r) => r.flags.length)
+  return (
+    <section className="events">
+      <h3>Worth knowing this week</h3>
+      {priced.length > 0 && (
+        <ul className="take">
+          {priced.map(({ p, status, why, source }) => (
+            <li key={p.id}>
+              <button className="link" onClick={() => ctx.open(p.id)}>{p.name}</button>
+              {' '}<span className={`badge ${status}`}>{status === 'out' ? 'OUT' : 'GTD'}</span>
+              {why && <span className="muted"> {why}{source ? ` (${source})` : ''}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {read.length > 0 && (
+        <>
+          <h4>Off the court</h4>
+          <ul className="take">
+            {read.map(({ p, flags }) => (
+              <li key={p.id}>
+                <button className="link" onClick={() => ctx.open(p.id)}>{p.name}</button>
+                <span className="muted"> {flags.map((f) => f.title).join(' · ')}</span>
+              </li>
+            ))}
+          </ul>
+          <small className="muted">
+            These change no number in the app. An arrest or a bereavement can cost games, but
+            by how much is a judgement, and a figure invented for it would quietly bend the
+            win probability and every waiver suggestion that follows. Read them and decide.
+          </small>
+        </>
+      )}
+    </section>
+  )
+}
+
 export default function Team({ ctx }) {
   const { myPlayers, values, settings, teams } = ctx
   const [, b] = weekBounds(etToday())
@@ -77,6 +121,7 @@ export default function Team({ ctx }) {
           {lineup.benched.length > 0 && <small className="benchline">Bench: {lineup.benched.map((p) => p.name).join(', ')}</small>}
         </section>
         {open > 0 && <p className="banner warn">You have {open} open roster spot{open > 1 ? 's' : ''}. An empty spot can never score: add the best free agent from <a href="#waivers">Waivers</a>.</p>}
+        <Events ctx={ctx} myPlayers={myPlayers} />
         <div className="scroll">
           <table className="t roster">
             <thead><tr>

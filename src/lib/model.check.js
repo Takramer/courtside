@@ -208,3 +208,58 @@ assert.deepEqual(P.frictionFor(null, 'Nikola Jokic'), [])
 assert.equal(P.frictionFor({ pairs: [...FR.pairs, { a: 1, a_name: 'Nikola Jokić', b: 9, b_name: 'Once Only', n: 1, kinds: { flagrant: 1 }, last: '2026-02-01' }] }, 'Nikola Jokic')[0].n, 2)
 
 console.log('matchup and friction checks pass')
+
+// ---------- phase 7: what the feed is allowed to do to p_play ----------
+const NOW = Date.parse('2026-10-19T12:00:00Z')
+const item = (title, hoursAgo, tags, src = 'RotoWire') =>
+  ({ title, src, date: new Date(NOW - hoursAgo * 3600e3).toISOString(), tags: tags.map((k) => ({ k })) })
+
+// ESPN's own flags are the top of the tree and are never talked out of it.
+assert.equal(P.availability({ inj: 'OUT' }).status, 'out')
+assert.equal(P.availability({ inj: 'SUSPENSION' }).why, 'Suspended')
+assert.equal(P.availability({ inj: 'INJURY_RESERVE' }).status, 'out')
+assert.equal(P.availability({ inj: 'DAY_TO_DAY' }).status, 'dtd')
+assert.equal(P.availability({ inj: 'ACTIVE' }).status, 'ok')
+assert.equal(P.availability().status, 'ok', 'no information is not bad information')
+
+// The injury report sits below the flag and above the news.
+assert.equal(P.availability({ report: { status: 'Out', comment: 'Left knee' } }).why, 'Left knee')
+assert.equal(P.availability({ report: { status: 'Day-To-Day' } }).status, 'dtd')
+
+// News is routinely hours ahead of both, which is the point of reading it.
+const ruledOut = P.availability({ news: [item('Ruled out Thursday', 3, ['out'])], now: NOW })
+assert.equal(ruledOut.status, 'out')
+assert.equal(ruledOut.source, 'RotoWire')
+// A suspension is a stated number of games, so it prices exactly like an injury.
+assert.equal(P.availability({ news: [item('Suspended five games', 5, ['suspended'])], now: NOW }).status, 'out')
+// Stale news does not keep benching him: last Tuesday's "ruled out" is about last Tuesday.
+assert.equal(P.availability({ news: [item('Ruled out', 80, ['out'])], now: NOW }).status, 'ok')
+// "Returns from suspension Friday" carries the word that would otherwise bench him. The
+// return is the newer fact and has to win, or every comeback reads as an absence.
+assert.equal(P.availability({ news: [item('Returns from suspension Friday', 2, ['suspended', 'roleup'])], now: NOW }).status, 'ok')
+assert.equal(P.availability({ news: [item('Questionable, sore knee', 2, ['questionable'])], now: NOW }).status, 'dtd')
+
+// The whole point of the split: off-court events are surfaced and priced at nothing.
+const legal = P.availability({ news: [item('Arrested on Saturday', 20, ['legal'], 'ESPN')], now: NOW })
+assert.equal(legal.status, 'ok', 'an arrest is not a lineup decision and must not be priced as one')
+assert.equal(legal.flags.length, 1)
+assert.equal(legal.flags[0].tag, 'legal')
+const personal = P.availability({ news: [item('Away from the team, family matter', 48, ['personal'])], now: NOW })
+assert.equal(personal.status, 'ok')
+assert.equal(personal.flags[0].tag, 'personal')
+// Flags have a longer memory than priced news — a court date from Monday still matters on
+// Friday, while Monday's "ruled out" does not.
+assert.equal(P.availability({ news: [item('Court date set', 24 * 6, ['legal'])], now: NOW }).flags.length, 1)
+assert.equal(P.availability({ news: [item('Court date set', 24 * 9, ['legal'])], now: NOW }).flags.length, 0)
+// Out and flagged at once: the injury prices, the arrest is still shown.
+const both = P.availability({ inj: 'OUT', news: [item('Arrested', 10, ['legal'])], now: NOW })
+assert.equal(both.status, 'out')
+assert.equal(both.flags.length, 1)
+// An item with no date cannot be dated, so it is neither priced nor flagged.
+assert.equal(P.availability({ news: [{ title: 'Ruled out', tags: [{ k: 'out' }] }], now: NOW }).status, 'ok')
+
+// End to end: the resolver's answer is what projectPlayer turns into a chance of playing.
+assert.equal(P.projectPlayer({ espnFp: 40, status: P.availability({ inj: 'OUT' }).status }).pPlay, 0)
+assert.equal(P.projectPlayer({ espnFp: 40, status: legal.status, form: { fp_mean: 40, fp_sd: 9, avail: 1 } }).pPlay, 0.92)
+
+console.log('event feed checks pass')

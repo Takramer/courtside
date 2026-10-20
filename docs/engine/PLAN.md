@@ -1,6 +1,6 @@
 # Courtside engine — plan
 
-Written 2026-10-19. Phases 1 to 6 are built; 7 and 8 are still a plan.
+Written 2026-10-19. Phases 1 to 7 are built; 8 is still a plan.
 
 Two jobs, in this order:
 
@@ -175,7 +175,7 @@ Each one ships on its own and is useful alone.
 | 4 | **Done.** Win probability and the breakdown on **This week** | The number you asked for |
 | 5 | **Done.** Defence-vs-position, in `public/data/dvp.json` and `opponentFactor` | Sharpens step 3 |
 | 6 | **Done.** Matchup history and the friction table, in the player panel | The detail nobody else has |
-| 7 | Event feed: injuries, legal, suspensions → `p_play` | Catches the week-wreckers |
+| 7 | **Done.** One availability resolver, a roster news sweep, off-court flags | Catches the week-wreckers |
 | 8 | Calibration page: what the model said vs what happened | Proves, or disproves, the whole thing |
 
 Phases 1 and 2 are a weekend each. Phases 3 and 4 are the real work — a week of evenings, and
@@ -226,3 +226,23 @@ Settled 2026-10-19, phase 6:
 11. **Defenders carry the team they are on now**, not the team they were on when the
    possessions happened. Without that the table is trivia; with it the app can mark the men
    he actually runs into this week.
+
+Settled 2026-10-19, phase 7:
+
+12. **One resolver, not two.** The matchup page read ESPN's fantasy flag and the rest of the
+   app read the injury report, so the same player could be out on one screen and fine on
+   the next. `availability()` is now the only thing that decides, and everything calls it.
+13. **Only availability statements move `p_play`.** "Ruled out" and "suspended" are the
+   league or the team saying he will not be on the floor; pricing them is arithmetic. An
+   arrest, a lawsuit, a bereavement, a divorce are not. They raise the chance of missed
+   games by an amount nobody can honestly name, so they are tagged, dated, shown next to
+   the player — and priced at nothing, with the panel saying so. The old `personal` tag
+   lumped suspensions in with family news, which meant either pricing a divorce or missing
+   a suspension; it is now three tags.
+14. **The press sweep can flag but never bench.** General headlines are written to be read,
+   not parsed: "ruled out of the MVP race" carries the words that would zero a projection,
+   and that mistake costs the whole week. Pricing stays with RotoWire, ESPN's injury report
+   and ESPN's own flag, which are written about availability.
+15. **GDELT is out.** Measured, not assumed: 429 on a cold request, roughly one answer a
+   minute at best. Google News RSS does the same job and answers every time. See
+   [SOURCES.md](SOURCES.md).

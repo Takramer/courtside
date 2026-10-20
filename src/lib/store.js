@@ -13,6 +13,7 @@ export function useFetch(url) {
   const [state, setState] = useState({ data: null, error: null })
   useEffect(() => {
     let live = true
+    if (!url) return () => { live = false } // nothing to ask for yet, which is not an error
     fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${url} returned ${r.status}`))))
       .then((data) => live && setState({ data, error: null }))
       .catch((error) => live && setState({ data: null, error: String(error.message || error) }))

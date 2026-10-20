@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import { etToday, gameOn, gamesBetween, weekBounds } from '../lib/model.js'
-import { opponentFactor, projectPlayer, weekOutlook } from '../lib/predict.js'
+import { availability, opponentFactor, projectPlayer, weekOutlook } from '../lib/predict.js'
 import { Tip, fmt } from '../components.jsx'
 import { useMatchup } from '../lib/espn.js'
 import './matchup.css'
@@ -56,9 +56,13 @@ function priceSide(ctx, side, today, weekEnd, currentSeason) {
     const form = ctx.formBy.get(p.id)
     const espnFp = ctx.values.get(p.id)?.fp
     if (espnFp == null && !form) { unknown++; continue } // deep bench, nothing to price him on
-    const status = p.inj === 'OUT' || p.inj === 'INJURY_RESERVE' || p.inj === 'SUSPENSION' ? 'out'
-      : ['DAY_TO_DAY', 'QUESTIONABLE', 'DOUBTFUL'].includes(p.inj) ? 'dtd'
-        : known ? ctx.status(known) : 'ok'
+    // The live matchup carries its own injury flag, fresher than the player pool's, so it
+    // goes in first. One resolver, the same answer the rest of the app gets.
+    const { status } = availability({
+      inj: p.inj || known?.inj,
+      report: ctx.injuryBy.get(p.id),
+      news: ctx.newsBy.get(p.id),
+    })
     const proj = projectPlayer({ espnFp, form, status, current: currentSeason })
     const games = gamesBetween(ctx.teams[p.team], today, weekEnd)
     // One multiplier per night, in date order: a week against Washington is not a week
