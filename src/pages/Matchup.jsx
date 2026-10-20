@@ -1,11 +1,13 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { etToday, gameOn, gamesBetween, weekBounds } from '../lib/model.js'
 import { availability, opponentFactor, projectPlayer, weekOutlook } from '../lib/predict.js'
+import { recordWeek } from '../lib/grade.js'
 import { Tip, fmt } from '../components.jsx'
 import { useMatchup } from '../lib/espn.js'
 import './matchup.css'
 
 const time = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+const SEASON_TAG = '2026-27'
 
 // One player's day: where he is playing, and what he has scored so far.
 function Line({ ctx, p, today }) {
@@ -81,6 +83,9 @@ export default function Matchup({ ctx }) {
   const today = etToday()
   const [, weekEnd] = weekBounds(today)
   const slots = ctx.settings.slots.split(',').map((x) => x.trim()).filter(Boolean)
+  // Days left in the fantasy week, today included: the lineup cap is per day, not per week,
+  // and phase 8 records it so a Thursday forecast is never graded as a full-week claim.
+  const daysLeft = Math.max(1, Math.round((new Date(`${weekEnd}T12:00:00Z`) - new Date(`${today}T12:00:00Z`)) / 86400000) + 1)
 
   // This season's own games get trusted by how many there are; last season's only as a prior.
   const currentSeason = ctx.formCurrent
@@ -89,10 +94,24 @@ export default function Matchup({ ctx }) {
     const mine = priceSide(ctx, d.me, today, weekEnd, currentSeason)
     const theirs = priceSide(ctx, d.opp, today, weekEnd, currentSeason)
     if (!mine.players.length || !theirs.players.length) return null
-    // Days left in the fantasy week, today included: the lineup cap is per day, not per week.
-    const daysLeft = Math.max(1, Math.round((new Date(`${weekEnd}T12:00:00Z`) - new Date(`${today}T12:00:00Z`)) / 86400000) + 1)
     return { ...weekOutlook(mine.players, theirs.players, { starts: slots.length, days: daysLeft }), unknown: mine.unknown + theirs.unknown }
-  }, [d, ctx.players, ctx.formBy, ctx.dvp, today, weekEnd, currentSeason, slots.length])
+  }, [d, ctx.players, ctx.formBy, ctx.dvp, today, weekEnd, currentSeason, slots.length, daysLeft])
+
+  // Phase 8. Write this week's claim down the first time it is seen and never again: the
+  // thing worth grading is what the model said before it knew. recordWeek ignores a week it
+  // already holds, so opening the app on Thursday cannot quietly improve Monday's forecast.
+  useEffect(() => {
+    if (!odds || !d?.matchupPeriod) return
+    ctx.setLedger((l) => recordWeek(l, {
+      week: d.matchupPeriod,
+      season: SEASON_TAG,
+      pWin: odds.pWin,
+      myMu: odds.me.mu, mySd: odds.me.sd, myGames: odds.me.games,
+      oppMu: odds.opp.mu, oppSd: odds.opp.sd, oppGames: odds.opp.games,
+      me: d.me?.name ?? null, opp: d.opp?.name ?? null,
+      daysLeft,
+    }))
+  }, [odds, d?.matchupPeriod])
 
   if (!ctx.espn.league || !ctx.espn.team) {
     return (

@@ -12,6 +12,7 @@ import Waivers from './pages/Waivers.jsx'
 import Trade from './pages/Trade.jsx'
 import News from './pages/News.jsx'
 import League from './pages/League.jsx'
+import Scorecard from './pages/Scorecard.jsx'
 import Learn from './pages/Learn.jsx'
 
 const TABS = [
@@ -20,6 +21,7 @@ const TABS = [
   ['waivers', 'Waivers', Waivers],
   ['trade', 'Trade', Trade],
   ['news', 'News', News],
+  ['scorecard', 'Scorecard', Scorecard],
   ['league', 'League setup', League],
   ['learn', 'Learn', Learn],
 ]
@@ -59,6 +61,8 @@ export default function App() {
   const [taken, setTaken] = useLocal('cs.taken', [])
   const [rosterLoaded, setRosterLoaded] = useLocal('cs.roster.drafted', false)
   const [espn, setEspn] = useLocal('cs.espn', { league: '', s2: '', swid: '', team: null })
+  // Phase 8: what the model claimed each week, written once, before the games.
+  const [ledger, setLedger] = useLocal('cs.ledger.v1', {})
   const [incoming, setIncoming] = useState(() => tokenInUrl())
   // Opening the link in a tab that already has the app running only changes the hash, so
   // watch for that too rather than silently doing nothing.
@@ -174,7 +178,7 @@ export default function App() {
   const ctx = {
     isFree, exactTaken, espn, setEspn, league, linked,
     players, byId, teams, values, formBy, formUpdated: fdata.data?.updated, formCurrent: !!fdata.data?.is_current_season, dvp: ddata.data, dvpUpdated: ddata.data?.updated, matchups: mdata.data, friction: xdata.data, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
-    newsBy, injuryBy, offCourtBy, status, avail, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
+    newsBy, injuryBy, offCourtBy, status, avail, ledger, setLedger, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
     myPlayers: mine.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => (values.get(b.id)?.val ?? -99) - (values.get(a.id)?.val ?? -99)),
   }
   const Page = (TABS.find((t) => t[0] === tab) || TABS[0])[2]

@@ -67,3 +67,31 @@ export function useMatchup(conn, every = 60000) {
 
   return { ...state, reload }
 }
+
+// Every week that is already over, straight from ESPN. Phase 8 grades against these rather
+// than against whatever score the app happened to see last — which, for anyone who did not
+// open it on Sunday night, would be Sunday afternoon's.
+export function useHistory(conn) {
+  const [state, setState] = useState({ at: null, weeks: null, loading: false, error: null })
+
+  useEffect(() => {
+    if (!conn?.league || !conn?.team) { setState({ at: null, weeks: null, loading: false, error: null }); return }
+    let live = true
+    setState((s) => ({ ...s, loading: true }))
+    fetch('/api/matchup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ league: conn.league, s2: conn.s2 || '', swid: conn.swid || '', team: conn.team, history: true }),
+    })
+      .then(async (r) => {
+        const j = await r.json()
+        if (!r.ok) throw new Error(j.error || `ESPN lookup failed (${r.status})`)
+        return j
+      })
+      .then((j) => live && setState({ at: Date.now(), weeks: j.weeks, loading: false, error: null }))
+      .catch((e) => live && setState((s) => ({ ...s, loading: false, error: String(e.message || e) })))
+    return () => { live = false }
+  }, [conn?.league, conn?.team, conn?.s2, conn?.swid])
+
+  return state
+}

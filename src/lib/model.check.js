@@ -263,3 +263,86 @@ assert.equal(P.projectPlayer({ espnFp: 40, status: P.availability({ inj: 'OUT' }
 assert.equal(P.projectPlayer({ espnFp: 40, status: legal.status, form: { fp_mean: 40, fp_sd: 9, avail: 1 } }).pPlay, 0.92)
 
 console.log('event feed checks pass')
+
+// ---------- phase 8: grading the model ----------
+const G = await import('./grade.js')
+
+// The forecast is written once. Opening the app again on Thursday must not quietly replace
+// Monday's claim with a better-informed one — that is how a model marks its own homework.
+let led = G.recordWeek({}, { week: 3, pWin: 0.6, myMu: 1400, mySd: 150, daysLeft: 7 })
+led = G.recordWeek(led, { week: 3, pWin: 0.9, myMu: 1500, mySd: 120, daysLeft: 4 })
+assert.equal(led['3'].pWin, 0.6, 'the first snapshot is the prediction')
+assert.ok(led['3'].saved)
+assert.deepEqual(G.recordWeek({}, { pWin: 0.6 }), {}, 'no week number, nothing recorded')
+
+// Settling attaches the result and leaves the claim alone.
+led = G.settle(led, [{ week: 3, my: 1480, opp: 1390 }])
+assert.equal(led['3'].final.won, true)
+assert.equal(led['3'].pWin, 0.6)
+assert.deepEqual(G.settle(led, [{ week: 3, my: 1480, opp: 1390 }])['3'], led['3'], 'settling twice changes nothing')
+assert.equal(G.settle(led, [{ week: 9, my: 1, opp: 2 }])['9'], undefined, 'a result with no forecast is not a grade')
+assert.equal(G.settle(led, [{ week: 3, my: null, opp: 1 }])['3'].final.my, 1480, 'a half-finished week does not overwrite')
+
+// A week in progress is not graded.
+const open = G.score(G.recordWeek({}, { week: 1, pWin: 0.6, myMu: 1400, mySd: 150, daysLeft: 7 }))
+assert.equal(open.graded, 0)
+assert.equal(open.pending, 1)
+assert.equal(open.brier, null, 'no graded weeks means no score, not a flattering zero')
+assert.equal(open.points, null)
+
+// A built ledger: four weeks, three won.
+const build = (rows) => {
+  let l = {}
+  for (const r of rows) l = G.recordWeek(l, { week: r.w, pWin: r.p, myMu: r.mu, mySd: r.sd ?? 100, daysLeft: r.d ?? 7 })
+  return G.settle(l, rows.map((r) => ({ week: r.w, my: r.my, opp: r.opp })))
+}
+const s = G.score(build([
+  { w: 1, p: 0.6, mu: 1400, my: 1450, opp: 1300 },
+  { w: 2, p: 0.7, mu: 1400, my: 1380, opp: 1500 },
+  { w: 3, p: 0.8, mu: 1400, my: 1420, opp: 1200 },
+  { w: 4, p: 0.55, mu: 1400, my: 1500, opp: 1400 },
+]))
+assert.equal(s.graded, 4)
+assert.deepEqual(s.record, { won: 3, lost: 1 })
+// Bias is signed, because "runs 25 points low every week" is a fix and "is off by 25" is not.
+assert.equal(s.points.bias, 37.5)
+assert.equal(s.points.mae, 47.5)
+// Brier by hand: (0.4^2 + 0.7^2 + 0.2^2 + 0.45^2) / 4
+assert.ok(Math.abs(s.brier - 0.2231) < 1e-4, `brier ${s.brier}`)
+assert.equal(s.baseline, 0.25)
+assert.equal(s.beatsCoin, true)
+
+// A model that is confidently wrong has to score worse than the coin, or the page is
+// decoration. This is the check that lets the app call itself broken.
+const bad = G.score(build([
+  { w: 1, p: 0.9, mu: 1400, my: 1000, opp: 1500 },
+  { w: 2, p: 0.95, mu: 1400, my: 1000, opp: 1500 },
+]))
+assert.ok(bad.brier > 0.25 && bad.beatsCoin === false, `confidently wrong must lose to a coin: ${bad.brier}`)
+
+// Ties are not wins and are left out rather than counted either way.
+assert.equal(G.score(build([{ w: 1, p: 0.6, mu: 1400, my: 1400, opp: 1400 }])).graded, 0)
+
+// The spread is a claim too: about 68% of weeks should land inside one standard deviation.
+const band = G.score(build([
+  { w: 1, p: 0.5, mu: 1400, sd: 100, my: 1450, opp: 1300 }, // inside
+  { w: 2, p: 0.5, mu: 1400, sd: 100, my: 1700, opp: 1300 }, // outside
+]))
+assert.equal(band.points.within1sd, 0.5)
+assert.equal(band.points.expected1sd, 0.68)
+
+// Buckets show where it is wrong, not just that it is.
+assert.deepEqual(s.buckets.map((b) => b.n), [1, 1, 1, 1]) // 0.55, 0.6, 0.7, 0.8 land one to a bucket
+assert.equal(s.buckets.find((b) => b.from === 0.8).actual, 1)
+
+// Four weeks is not a season. The page may show the number; it may not call it a verdict.
+assert.equal(s.enoughForProbability, false)
+assert.equal(G.score(build(Array.from({ length: 20 }, (_, i) =>
+  ({ w: i + 1, p: 0.6, mu: 1400, my: 1450, opp: 1300 }))), { minForProbability: 20 }).enoughForProbability, true)
+
+// Only a snapshot taken before any games grades the full claim.
+assert.equal(G.isFullWeek({ daysLeft: 7 }), true)
+assert.equal(G.isFullWeek({ daysLeft: 4 }), false)
+assert.equal(G.score(build([{ w: 1, p: 0.6, mu: 1400, my: 1450, opp: 1300, d: 3 }])).fullWeek, 0)
+
+console.log('grading checks pass')
