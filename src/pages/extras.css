@@ -210,3 +210,8 @@
 .leaguepage .espnform label { display: flex; flex-direction: column; gap: 4px; font-family: var(--cond); font-size: 15px; color: var(--muted); }
 .leaguepage .espnform code { background: var(--panel2); padding: 1px 4px; border-radius: var(--r-s); }
 .leaguepage .espnlink .row { display: flex; gap: var(--s2); flex-wrap: wrap; margin-top: var(--s3); }
+
+/* Defender rows he actually meets this week. Quiet: a left edge and a shade, so the eye
+   finds them without the table turning into a traffic light. */
+.scrim .drawer .t tr.hit td { background: var(--panel2); }
+.scrim .drawer .t tr.hit td:first-child { box-shadow: inset 2px 0 0 var(--info); }

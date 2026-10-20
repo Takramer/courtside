@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Command } from 'cmdk'
 import { CATS, etToday, gamesBetween, tagNews, weekBounds } from './lib/model.js'
+import { defenderHistory, frictionFor } from './lib/predict.js'
 import './pages/extras.css'
 
 export const fmt = (x, d = 1) => (x == null || Number.isNaN(x) ? '–' : x.toFixed(d))
@@ -92,6 +93,75 @@ const LINE_ROWS = [['proj', 'Projection (this season)'], ['cur', 'This season so
 
 const STAT_HEAD = [['MIN', 'Minutes'], ['PTS', 'Points'], ['REB', 'Rebounds'], ['AST', 'Assists'], ['STL', 'Steals'], ['BLK', 'Blocks'], ['3PM', '3-pointers made'], ['FG%', 'Field goal %'], ['FT%', 'Free throw %'], ['TO', 'Turnovers (lower is better)'], ['GP', 'Games played']]
 const OWNERS = [['mine', 'On my team'], ['taken', 'Another team'], ['free', 'Available']]
+
+// Possession-by-possession history against the men who guard him. The ones he runs into
+// this week come first and are marked: the same 31% is trivia against someone retired and
+// a reason to think against Thursday's starter.
+function Guards({ ctx, p }) {
+  const today = etToday()
+  const [, weekEnd] = weekBounds(today)
+  const facing = gamesBetween(ctx.teams[p.team], today, weekEnd).map((g) => ctx.teams[g.opp]?.abbrev)
+  const rows = defenderHistory(ctx.matchups, p.name, facing)
+  if (!rows.length) return null
+  return (
+    <>
+      <h3>Who guards him</h3>
+      <div className="scroll dstats">
+        <table className="t small">
+          <thead><tr>
+            <th>Defender</th>
+            <th className="num"><Tip text="Possessions the NBA charged to this pairing. Under 30 it is left out entirely.">Poss</Tip></th>
+            <th className="num"><Tip text="Points he scored against this defender per 100 of those possessions. Comparable across defenders who guarded him for very different stretches.">Pts/100</Tip></th>
+            <th className="num"><Tip text="His field goal percentage in those possessions. Blank under 10 attempts, because below that it is a coin flip with a decimal point.">FG%</Tip></th>
+            <th className="num">TO</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className={r.thisWeek ? 'hit' : ''}>
+                <td>
+                  {r.name}
+                  {r.team ? <small className="muted"> {r.team}</small> : <small className="muted"> not in the league</small>}
+                  {r.thisWeek && <span className="tag info">this week</span>}
+                </td>
+                <td className="num">{fmt(r.poss, 0)}</td>
+                <td className="num strong">{fmt(r.pts100, 1)}</td>
+                <td className="num">{r.fg == null ? '–' : fmt(r.fg * 100, 0)}</td>
+                <td className="num">{fmt(r.tov, 1)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <small className="muted">
+        {ctx.matchups?.season} regular season, {ctx.matchups?.min_poss}+ possessions, his {ctx.matchups?.top_n} most frequent defenders.
+      </small>
+    </>
+  )
+}
+
+// Flagrant fouls and double technicals name both men. Single technicals name only one, so
+// they are counted and never paired. Nothing here touches a projection.
+function Friction({ ctx, p }) {
+  const rows = frictionFor(ctx.friction, p.name)
+  if (!rows.length) return null
+  return (
+    <>
+      <h3>History with</h3>
+      <ul className="take">
+        {rows.map((r) => (
+          <li key={r.name}>
+            <b>{r.name}</b> — {Object.entries(r.kinds).map(([k, n]) => `${n} ${k}${n > 1 ? 's' : ''}`).join(', ')}
+            {r.last && <span className="muted">, last on {r.last}</span>}
+          </li>
+        ))}
+      </ul>
+      <small className="muted">
+        Both men named in the same flagrant foul or double technical, {ctx.friction?.season}. This
+        changes no number in the app — there is no honest way to price a grudge. It is here to read.
+      </small>
+    </>
+  )
+}
 
 export function PlayerDrawer({ ctx, p, onClose }) {
   const [press, setPress] = useState(null)
@@ -194,6 +264,9 @@ export function PlayerDrawer({ ctx, p, onClose }) {
             </tbody>
           </table>
         </div>
+
+        <Guards ctx={ctx} p={p} />
+        <Friction ctx={ctx} p={p} />
 
         <h3>Latest news</h3>
         {news.length ? <ul className="newslist">{news.map((n, i) => <NewsItem key={i} n={n} ctx={ctx} />)}</ul> : <p className="muted">No fantasy news on him in the current feed.</p>}

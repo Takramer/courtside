@@ -22,6 +22,18 @@ run on their own too:
 | `form` | nothing | mean, spread and availability per player, printed |
 | `export` | `../public/data/form.json` | the same, for the site |
 | `dvp` | `../public/data/dvp.json` | fantasy points per 36 allowed, by team and position |
+| `matchups` | `../public/data/matchups.json` | defender vs scorer, possession by possession |
+| `friction` | `../public/data/friction.json` | flagrants and double technicals, both men named |
+| `pbp` | `courtside.db` | play-by-play, the input to `friction`. Not in `all` — see below |
+
+`pbp` is the one slow job: one call per game, about twenty minutes for a full season. It
+stores as it goes and remembers which games it has read, so it is safe to interrupt and
+cheap to re-run — after a night of basketball it only fetches the new games. Run it on its
+own, then `friction` to rebuild the table from what it collected:
+
+```bash
+python ingest.py pbp && python ingest.py friction
+```
 
 `python ingest.py --check` answers one question: can this machine reach `stats.nba.com`? NBA
 blocks most datacenter IPs; a residential connection is fine.

@@ -6,7 +6,10 @@ derived artifacts the website reads.
     python ingest.py form         recompute rolling form from what is in the db
     python ingest.py export       write ../public/data/form.json for the site
     python ingest.py dvp          defence by position -> ../public/data/dvp.json
-    python ingest.py all          logs, form, export, dvp
+    python ingest.py pbp          play-by-play for flagrants and technicals (slow, resumable)
+    python ingest.py friction     pairings -> ../public/data/friction.json
+    python ingest.py matchups     defender vs scorer -> ../public/data/matchups.json
+    python ingest.py all          logs, form, export, dvp, friction, matchups
 
 Runs on the laptop, not a server: NBA refuses datacenter IPs. See ../docs/engine/SOURCES.md.
 Nothing here touches ESPN — the browser does that, with credentials that stay on your devices.
@@ -44,6 +47,11 @@ DVP_K = 150        # shrinkage, in player-games. A full season against one team 
 DVP_CLAMP = 0.12   # no opponent moves a projection by more than this, whatever the table says
 DVP_MIN_MIN = 10   # a garbage-time cameo says nothing about a defence
 
+# Defender vs scorer. Thirty possessions is roughly a quarter of real coverage: under that
+# the field-goal percentage is a coin flip wearing a decimal point.
+MATCHUP_MIN_POSS = 30
+MATCHUP_TOP_N = 8  # defenders kept per scorer, most-guarded first
+
 HEADERS = {
     "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"),
@@ -80,6 +88,25 @@ create table if not exists player_pos (
   player_id integer primary key,
   pos text not null            -- G, F or C: finer than this and the cells are too thin to read
 );
+
+-- Which games the play-by-play has already been read for. The pull is a thousand calls at
+-- a second each, so it has to survive being interrupted and pick up where it stopped.
+create table if not exists pbp_games (
+  game_id text primary key,
+  season  text not null,
+  at      text not null
+);
+
+-- Only the handful of events worth keeping, already resolved into pairs. Storing every
+-- action would be half a million rows to answer a question about a few hundred.
+create table if not exists friction_events (
+  game_id text not null, season text not null, game_date text,
+  kind text not null,              -- flagrant | technical | double technical
+  period integer, clock text,
+  player_id integer, player_name text,
+  other_id integer, other_name text
+);
+create index if not exists friction_pair on friction_events (player_id, other_id);
 
 create table if not exists runs (
   job text not null, season text not null, at text not null, rows integer not null
@@ -367,6 +394,252 @@ def job_dvp():
     return 0
 
 
+# ---------------------------------------------------------------- defender vs scorer
+
+def job_matchups(season):
+    """Who guards whom, and how it goes. One call, about 150,000 pairs, cut to the ones
+    that rest on enough coverage to mean anything.
+
+    This is the part of the engine that nothing else has. ESPN will tell you a player
+    averages 28; it will not tell you he has shot 31% against the man waiting for him on
+    Thursday. The cut is deliberate: under MATCHUP_MIN_POSS possessions a field-goal
+    percentage is noise with a decimal point, and showing it would be worse than silence."""
+    # Where those defenders play *now*, not where they played when the possessions happened.
+    # Without this the table is trivia; with it the app can say which of them he actually
+    # runs into this week.
+    now = {}
+    for r in rows_of(get("playerindex", {"LeagueID": "00", "Season": THIS_SEASON})):
+        if r.get("TEAM_ABBREVIATION"):
+            now[r["PERSON_ID"]] = r["TEAM_ABBREVIATION"]
+
+    payload = get("leagueseasonmatchups", {
+        "LeagueID": "00", "Season": season, "SeasonType": "Regular Season",
+        "PerMode": "Totals"}, timeout=90)
+    rows = [r for r in rows_of(payload) if (r["PARTIAL_POSS"] or 0) >= MATCHUP_MIN_POSS]
+    by_scorer = {}
+    for r in rows:
+        by_scorer.setdefault(r["OFF_PLAYER_ID"], []).append(r)
+
+    out = {}
+    names = {}
+    for pid, rs in by_scorer.items():
+        rs.sort(key=lambda r: -r["PARTIAL_POSS"])
+        names[pid] = rs[0]["OFF_PLAYER_NAME"]
+        kept = []
+        for r in rs[:MATCHUP_TOP_N]:
+            poss = r["PARTIAL_POSS"]
+            fga = r["MATCHUP_FGA"] or 0
+            names[r["DEF_PLAYER_ID"]] = r["DEF_PLAYER_NAME"]
+            kept.append({
+                "d": r["DEF_PLAYER_ID"],
+                "gp": r["GP"],
+                "poss": round(poss, 1),
+                # Per 100 possessions, because the whole point is comparing defenders who
+                # guarded him for wildly different amounts of time.
+                "pts100": round((r["PLAYER_PTS"] or 0) / poss * 100, 1),
+                "fga": round(fga, 1),
+                # None, not 0: "he has not shot against this man" and "he shoots 0%" are
+                # different facts and only one of them is an indictment.
+                "fg": round(r["MATCHUP_FG_PCT"], 3) if fga >= 10 else None,
+                "tov": round(r["MATCHUP_TOV"] or 0, 1),
+            })
+        out[pid] = kept
+
+    path = os.path.join(DATA, "matchups.json")
+    os.makedirs(DATA, exist_ok=True)
+    payload = {
+        "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "season": season,
+        "min_poss": MATCHUP_MIN_POSS, "top_n": MATCHUP_TOP_N,
+        "note": ("Defender vs scorer, possession by possession, from leagueseasonmatchups. "
+                 "pts100 is points scored against that defender per 100 partial possessions; "
+                 "fg is field-goal percentage in those possessions, null under 10 attempts. "
+                 "Only pairs with at least " f"{MATCHUP_MIN_POSS} possessions, top "
+                 f"{MATCHUP_TOP_N} defenders per scorer."),
+        "names": {str(k): v for k, v in names.items()},
+        # ESPN writes Jokic, the NBA writes Jokić. Same normalisation as form.json, so the
+        # app joins on a name it can actually produce from its own player list.
+        "by_norm": {norm_name(names[k]): k for k in out},
+        # Defender id -> the team he is on this season. Missing means out of the league.
+        "now": {str(k): v for k, v in now.items() if k in names},
+        "scorers": {str(k): v for k, v in out.items()},
+    }
+    with open(path, "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    placed = sum(1 for k in names if k in now)
+    print(f"  {season}: {len(rows)} pairs over {MATCHUP_MIN_POSS} possessions, "
+          f"{len(out)} scorers kept, {placed}/{len(names)} still on an NBA roster")
+    print(f"  wrote {os.path.relpath(path)} \u2014 {os.path.getsize(path) // 1024} KB")
+    return len(out)
+
+
+# ---------------------------------------------------------------- friction
+
+# What counts. A single technical names only the man who got it: the free throw that follows
+# is shot by whoever his opponent nominates, so it says nothing about who he was arguing
+# with. A flagrant is different — the man fouled shoots the free throws himself, at the same
+# clock, which is what makes the pair recoverable. Two technicals on the same whistle from
+# opposite teams is the other honest pair.
+FLAGRANT_FT = "Free Throw Flagrant"
+
+
+def pbp_events(game_id, actions):
+    """Resolve one game's actions into friction pairs. Returns a list of rows."""
+    ft_by_moment = {}
+    for a in actions:
+        if (a.get("subType") or "").startswith(FLAGRANT_FT):
+            ft_by_moment.setdefault((a.get("period"), a.get("clock")), a)
+
+    out = []
+    techs = {}
+    for a in actions:
+        if a.get("actionType") != "Foul":
+            continue
+        sub = (a.get("subType") or "")
+        moment = (a.get("period"), a.get("clock"))
+        if sub.startswith("Flagrant"):
+            victim = ft_by_moment.get(moment)
+            out.append(["flagrant", a.get("period"), a.get("clock"),
+                        a.get("personId"), a.get("playerName"),
+                        victim.get("personId") if victim else None,
+                        victim.get("playerName") if victim else None])
+        elif sub == "Technical":
+            # Non-Unsportsmanlike Technical is a delay of game, not a grudge. Excluded above
+            # by the exact match.
+            techs.setdefault(moment, []).append(a)
+
+    for moment, group in techs.items():
+        teams = {a.get("teamId") for a in group}
+        if len(group) == 2 and len(teams) == 2:
+            a, b = group
+            out.append(["double technical", moment[0], moment[1],
+                        a.get("personId"), a.get("playerName"),
+                        b.get("personId"), b.get("playerName")])
+        else:
+            for a in group:
+                out.append(["technical", moment[0], moment[1],
+                            a.get("personId"), a.get("playerName"), None, None])
+    return out
+
+
+def job_pbp(season, limit=None):
+    """Read play-by-play for every game not already read. A thousand calls at a second
+    each, so it stores as it goes and picks up where it stopped."""
+    con = db()
+    done = {g for (g,) in con.execute("select game_id from pbp_games where season = ?", (season,))}
+    games = [(g, d) for g, d in con.execute(
+        "select distinct game_id, min(game_date) from player_games where season = ?"
+        " group by game_id order by game_date", (season,)) if g not in done]
+    if limit:
+        games = games[:limit]
+    if not games:
+        print(f"  {season}: play-by-play already read for all {len(done)} games")
+        return 0
+
+    print(f"  {season}: {len(games)} games to read, {len(done)} already done "
+          f"(about {len(games) // 60 + 1} minutes)")
+    read = 0
+    for i, (gid, date) in enumerate(games, 1):
+        try:
+            payload = get("playbyplayv3", {"GameID": gid, "StartPeriod": 0, "EndPeriod": 14},
+                          tries=3, timeout=40)
+        except SystemExit as e:
+            print(f"  stopped at game {i} of {len(games)}: {e}")
+            print("  already-read games are saved; run it again to carry on")
+            break
+        rows = pbp_events(gid, payload.get("game", {}).get("actions", []))
+        with con:
+            for kind, period, clock, pid, pname, oid, oname in rows:
+                con.execute("insert into friction_events values (?,?,?,?,?,?,?,?,?,?)",
+                            (gid, season, date, kind, period, clock, pid, pname, oid, oname))
+            con.execute("insert or replace into pbp_games values (?,?,?)",
+                        (gid, season, datetime.now(timezone.utc).isoformat()))
+        read += 1
+        if i % 100 == 0:
+            print(f"    {i}/{len(games)} games")
+        time.sleep(0.35)
+    n = con.execute("select count(*) from friction_events where season = ?", (season,)).fetchone()[0]
+    print(f"  read {read} games; {n} events stored for {season}")
+    return read
+
+
+def job_friction(season):
+    """Pairs that keep turning up together. A table, not a verdict: two flagrants between
+    the same men over a season is a fact, and whether it is a grudge is for you and the
+    news feed to decide. The model does not touch it."""
+    con = db()
+    # Play-by-play gives the family name only — "Gobert", not "Rudy Gobert" — and the app
+    # joins on the full name ESPN uses. Resolve through the id, which is the same in both
+    # feeds, and keep the short name only when the id is a stranger.
+    full = {pid: name for pid, name in con.execute("select player_id, name from players")}
+    pairs = {}
+    for kind, pid, pname, oid, oname, date in con.execute(
+            "select kind, player_id, player_name, other_id, other_name, game_date"
+            " from friction_events where season = ? and other_id is not null", (season,)):
+        pname = full.get(pid, pname)
+        oname = full.get(oid, oname)
+        key = tuple(sorted([(pid, pname), (oid, oname)]))
+        cell = pairs.setdefault(key, {"n": 0, "kinds": {}, "last": None})
+        cell["n"] += 1
+        cell["kinds"][kind] = cell["kinds"].get(kind, 0) + 1
+        cell["last"] = max(cell["last"] or "", date or "")
+
+    # Per player, counted from both ends. The first version only counted the man the event
+    # was charged to, which quietly lost every player on the receiving end of a flagrant
+    # and half of every double technical.
+    tally = {}
+    def bump(pid, name, key):
+        if pid is None:
+            return
+        cell = tally.setdefault(pid, {"id": pid, "name": name, "tech": 0, "gave": 0, "took": 0})
+        cell[key] += 1
+    for kind, pid, pname, oid, oname in con.execute(
+            "select kind, player_id, player_name, other_id, other_name"
+            " from friction_events where season = ?", (season,)):
+        pname = full.get(pid, pname)
+        oname = full.get(oid, oname)
+        if kind == "flagrant":
+            bump(pid, pname, "gave")
+            bump(oid, oname, "took")
+        else:
+            bump(pid, pname, "tech")
+            if kind == "double technical":
+                bump(oid, oname, "tech")
+    tallies = sorted(tally.values(),
+                     key=lambda r: -(r["tech"] + r["gave"] + r["took"]))[:40]
+
+    out = []
+    for (a, b), v in pairs.items():
+        out.append({"a": a[0], "a_name": a[1], "a_norm": norm_name(a[1]),
+                    "b": b[0], "b_name": b[1], "b_norm": norm_name(b[1]),
+                    "n": v["n"], "kinds": v["kinds"], "last": v["last"]})
+    out.sort(key=lambda r: (-r["n"], r["a_name"]))
+
+    path = os.path.join(DATA, "friction.json")
+    os.makedirs(DATA, exist_ok=True)
+    payload = {
+        "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "season": season,
+        "note": ("Pairs of players named in the same flagrant foul or double technical, "
+                 "from play-by-play. A flagrant pairs because the man fouled shoots the "
+                 "free throws himself; a single technical names nobody else, so it is "
+                 "counted in tallies and never paired. tech is technicals, gave is "
+                 "flagrants committed, took is flagrants received. This feeds no projection \u2014 there is "
+                 "no defensible way to turn a grudge into a minutes number. It is here to "
+                 "be read."),
+        "pairs": out,
+        "tallies": tallies,
+    }
+    with open(path, "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    repeat = [r for r in out if r["n"] > 1]
+    print(f"  {season}: {len(out)} pairs, {len(repeat)} of them more than once")
+    for r in repeat[:5]:
+        print(f"    {r['a_name']} / {r['b_name']} \u00d7{r['n']} {r['kinds']}")
+    print(f"  wrote {os.path.relpath(path)} \u2014 {os.path.getsize(path) // 1024} KB")
+    return len(out)
+
+
 def check():
     try:
         payload = get("leaguedashptteamdefend", {
@@ -384,7 +657,10 @@ JOBS = {"logs": "pull player game logs into courtside.db",
         "form": "recompute rolling mean and spread from the db",
         "export": "write ../public/data/form.json for the website",
         "dvp": "defence by position -> ../public/data/dvp.json",
-        "all": "logs, then form, then export, then dvp"}
+        "pbp": "play-by-play for flagrants and technicals (slow, resumable)",
+        "friction": "pairings -> ../public/data/friction.json",
+        "matchups": "defender vs scorer -> ../public/data/matchups.json",
+        "all": "logs, form, export, dvp, friction, matchups (not pbp: run that on its own)"}
 
 
 def main():
@@ -394,6 +670,7 @@ def main():
         f"{k}: {v}" for k, v in JOBS.items()))
     ap.add_argument("--check", action="store_true", help="can this machine reach stats.nba.com?")
     ap.add_argument("--season", default=None, help="one season, e.g. 2025-26")
+    ap.add_argument("--limit", type=int, default=None, help="pbp: stop after this many games")
     args = ap.parse_args()
 
     if args.check:
@@ -412,6 +689,12 @@ def main():
         job_export()
     if args.job in ("dvp", "all"):
         job_dvp()
+    if args.job == "pbp":
+        job_pbp(args.season or LAST_SEASON, limit=args.limit)
+    if args.job in ("friction", "all"):
+        job_friction(args.season or LAST_SEASON)
+    if args.job in ("matchups", "all"):
+        job_matchups(args.season or LAST_SEASON)
     print(f"  done in {time.time() - start:.1f}s")
     return 0
 

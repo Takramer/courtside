@@ -20,6 +20,8 @@
 // The error is small next to the spread of the players themselves, and it makes the result
 // slightly overconfident in the tails. Phase 8 grades this against what actually happens.
 
+import { normName } from './model.js'
+
 // Abramowitz & Stegun 7.1.26. Accurate to about 1.5e-7, which is far past what this needs.
 export function normalCdf(z) {
   const sign = z < 0 ? -1 : 1
@@ -81,6 +83,7 @@ export function playerDay({ mean, sd, pPlay }) {
 // ESPN and the NBA disagree about six abbreviations. The schedule in the app is ESPN's;
 // dvp.json comes from the NBA feed. This is the only place the two namespaces meet.
 const NBA_ABBREV = { GS: 'GSW', NO: 'NOP', NY: 'NYK', SA: 'SAS', UTAH: 'UTA', WSH: 'WAS' }
+export const nbaAbbrev = (espn) => NBA_ABBREV[espn] ?? espn
 
 // Guard, forward, centre — no finer. Split it to five and most team-position cells rest on
 // too few games to mean anything, and the table starts inventing differences.
@@ -95,7 +98,7 @@ const BUCKET = { PG: 'G', SG: 'G', SF: 'F', PF: 'F', C: 'C' }
  * gets the average of the two, because the defence does not know which one he is listed at.
  */
 export function opponentFactor(dvp, oppAbbrev, positions = []) {
-  const team = dvp?.teams?.[NBA_ABBREV[oppAbbrev] ?? oppAbbrev]
+  const team = dvp?.teams?.[nbaAbbrev(oppAbbrev)]
   if (!team) return 1
   const mults = [...new Set(positions.map((x) => BUCKET[x]).filter(Boolean))]
     .map((b) => team[b]?.mult).filter((m) => m != null)
@@ -195,4 +198,63 @@ export function weekOutlook(mine, theirs, opts = {}) {
     danger: [...opp.players].filter((p) => p.games > 0)
       .sort((a, b) => (b.mu + b.sd) - (a.mu + a.sd))[0] || null,
   }
+}
+
+
+// ---------------------------------------------------------------- phase 6: the detail
+
+/**
+ * Who has guarded this man, and how it went — possession by possession, from the NBA's own
+ * matchup data. Nothing in ESPN tells you this.
+ *
+ * `facing` is the list of teams he meets in the stretch you care about, in ESPN's spelling.
+ * Defenders currently on one of those teams float to the top and are marked, because a
+ * career 31% against someone retired is trivia and the same number against Thursday's
+ * starting guard is a reason to sit him.
+ *
+ * Returns [] whenever we cannot say: no table, or a player the table has never seen.
+ */
+export function defenderHistory(matchups, playerName, facing = []) {
+  const id = matchups?.by_norm?.[normName(playerName)]
+  const rows = id == null ? null : matchups.scorers?.[id]
+  if (!rows) return []
+  const meets = new Set(facing.filter(Boolean).map(nbaAbbrev))
+  return rows
+    .map((r) => {
+      const team = matchups.now?.[r.d] ?? null
+      return {
+        id: r.d,
+        name: matchups.names?.[r.d] ?? String(r.d),
+        team,
+        gp: r.gp,
+        poss: r.poss,
+        pts100: r.pts100,
+        fga: r.fga,
+        fg: r.fg,
+        tov: r.tov,
+        thisWeek: !!(team && meets.has(team)),
+      }
+    })
+    .sort((a, b) => (b.thisWeek - a.thisWeek) || (b.poss - a.poss))
+}
+
+/**
+ * Everyone this player has been named alongside in a flagrant foul or a double technical.
+ *
+ * This feeds no projection and it never will. There is no defensible way to turn "these two
+ * have come to blows twice" into a minutes number, and anything that claimed to would make
+ * every number downstream dishonest. It is surfaced, tagged, and left to you.
+ */
+export function frictionFor(friction, playerName) {
+  const me = normName(playerName)
+  const out = []
+  for (const r of friction?.pairs || []) {
+    // The worker writes the same normalisation it used; fall back to doing it here so an
+    // older file still joins.
+    const a = r.a_norm ?? normName(r.a_name)
+    const b = r.b_norm ?? normName(r.b_name)
+    if (a !== me && b !== me) continue
+    out.push({ name: a === me ? r.b_name : r.a_name, n: r.n, kinds: r.kinds, last: r.last })
+  }
+  return out.sort((x, y) => y.n - x.n)
 }
