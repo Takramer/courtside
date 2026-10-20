@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { etToday, gamesBetween, weekBounds } from '../lib/model.js'
-import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt } from '../components.jsx'
+import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt, heat } from '../components.jsx'
 import './season.css'
 
 const SORTS = [
@@ -25,6 +25,7 @@ export default function Waivers({ ctx }) {
   }[sort]
   const all = players.filter((p) => ctx.isFree(p) && ctx.status(p) !== 'out' && (pos === 'All' || p.pos.includes(pos)))
   const list = all.sort((x, y) => key(y) - key(x)).slice(0, 60)
+  const maxVal = Math.max(1, ...list.map((p) => values.get(p.id)?.val ?? 0))
   const worstMine = ctx.myPlayers[ctx.myPlayers.length - 1]
   const worstVal = worstMine ? values.get(worstMine.id)?.val ?? 0 : null
   const cats = catHeaders(settings)
@@ -73,7 +74,7 @@ export default function Waivers({ ctx }) {
         <div className="scroll">
           <table className="t wire">
             <thead><tr><th className="stick">Player</th><th className="num"><Tip text="Games left this week (Mon–Sun). More games means more stats.">Wk G</Tip></th><th className="num"><ValueTip settings={settings} /></th>
-              <th className="num"><Tip text="Last 15 days minus his usual level. Positive = playing better than expected.">Form</Tip></th>
+              <th className="num opt"><Tip text="Last 15 days minus his usual level. Positive = playing better than expected.">Form</Tip></th>
               <th className="num"><Tip text="% of ESPN leagues where he is rostered, and the change today.">Owned</Tip></th>
               {settings.format === 'cats' ? cats.map((c) => <th key={c.k} className="num" title={c.name}>{c.label}</th>) : <th className="num"><Tip text="Fantasy points per game, projected.">FPTS/G</Tip></th>}<th /></tr></thead>
             <tbody>
@@ -85,8 +86,8 @@ export default function Waivers({ ctx }) {
                   <tr key={p.id} className={upgrade ? 'upgrade' : ''}>
                     <td className="stick"><PlayerName ctx={ctx} p={p} />{upgrade && <Tip text={`Clearly more valuable than ${worstMine.name}. Worth the swap.`}><span className="tag good">upgrade</span></Tip>}</td>
                     <td className="num">{games(p)}</td>
-                    <td className="num strong">{fmt(v?.val)}</td>
-                    <td className="num">{v?.trend ? fmt(v.trend) : '–'}</td>
+                    <td className="heat"><i style={heat(v?.val, maxVal)} /><span>{fmt(v?.val)}</span></td>
+                    <td className="num opt">{v?.trend ? fmt(v.trend) : '–'}</td>
                     <td className="num">{fmt(p.own, 0)}% <small className={p.ownChg > 0 ? 'up' : p.ownChg < 0 ? 'down' : ''}>{p.ownChg > 0 ? '+' : ''}{fmt(p.ownChg)}</small></td>
                     {settings.format === 'cats' ? cats.map((c) => <ZCell key={c.k} z={v?.z[c.k]} />) : <td className="num">{fmt(v?.fp)}</td>}
                     <td className="actions"><button className={`btn sm ${loud ? '' : 'ghost'}`} onClick={() => ctx.moveTo(p.id, 'mine')}>I added him</button></td>

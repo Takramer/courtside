@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Courtside — Direction B: Instrument</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0B0D; --pane:#101216; --line:#1D2026; --line2:#2A2F38;
+  --ink:#E8EAED; --dim:#7C838F; --dimmer:#555C66;
+  --hot:#E8903A; --cold:#3E6B8C; --live:#4FB477; --dead:#C7453F;
+  font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:14px; line-height:1.45;
+  color:var(--ink); background:var(--bg); color-scheme:dark;
+  -webkit-font-smoothing:antialiased;
+}
+*{box-sizing:border-box} body{margin:0;height:100vh;overflow:hidden}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.lbl{font-family:'IBM Plex Sans Condensed';font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+
+/* ---- shell: rail + header + three panes + status. no page scroll. ---- */
+.shell{display:grid;grid-template-columns:58px 1fr;grid-template-rows:1fr 24px;height:100vh;padding-top:21px}
+.rail{border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px;grid-row:1/3}
+.mark{width:14px;height:14px;border-radius:50%;background:var(--ink);margin:4px 0 16px}
+.rail a{width:44px;padding:9px 0;text-align:center;color:var(--dimmer);text-decoration:none;font-family:'IBM Plex Sans Condensed';font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;border-left:2px solid transparent;margin-left:-2px}
+.rail a:hover{color:var(--ink)}
+.rail a.on{color:var(--ink);border-left-color:var(--hot);background:var(--pane)}
+.rail .k{display:block;font-family:'IBM Plex Mono';font-size:14px;font-weight:500;letter-spacing:0;margin-bottom:2px}
+
+.body{display:grid;grid-template-rows:38px 1fr;min-height:0}
+.bar{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--line);padding-right:10px}
+.bar .cell{display:flex;align-items:baseline;gap:7px;padding:0 14px;height:100%;border-right:1px solid var(--line)}
+.bar .cell:first-child{padding-left:14px}
+.bar .cell b{font-family:'IBM Plex Mono';font-size:15px;font-weight:500}
+.bar .right{margin-left:auto;border:0;color:var(--dim);font-size:12px}
+.bar .live{color:var(--live)}
+.bar .dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--live);margin-right:5px;vertical-align:1px}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;min-height:0}
+.col{display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0;border-right:1px solid var(--line)}
+.col:last-child{border-right:0}
+
+/* ---- alert strip: the one thing that is wrong, always row one ---- */
+.alert{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line);background:rgba(199,69,63,.1);box-shadow:inset 2px 0 0 var(--dead)}
+.alert .tagx{font-family:'IBM Plex Sans Condensed';font-size:10px;font-weight:600;letter-spacing:.12em;padding:2px 5px;background:var(--dead);color:#fff}
+.alert p{margin:0;font-size:13px}
+.alert p b{font-weight:600}
+.alert button{margin-left:auto;background:var(--ink);color:var(--bg);border:0;padding:5px 11px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.alert button:hover{background:var(--hot)}
+
+/* ---- dense table: 26px rows, mono numbers, heat on value only ---- */
+.pane{overflow:auto;min-height:0}
+table{width:100%;border-collapse:collapse}
+thead th{position:sticky;top:0;z-index:2;background:var(--bg);font-family:'IBM Plex Sans Condensed';font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-align:left;padding:7px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
+th.r,td.r{text-align:right}
+tbody td{padding:0 10px;height:26px;border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap}
+tbody tr:hover td{background:#14171C}
+tbody tr.sel td{background:#171B21;box-shadow:inset 2px 0 0 var(--hot)}
+.rk{color:var(--dimmer);width:26px}
+.nm{font-weight:500}
+.tm{color:var(--dim);font-size:11px;letter-spacing:.04em;margin-left:7px}
+.sl{font-family:'IBM Plex Sans Condensed';font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--dim);width:42px}
+tr.start .sl{color:var(--hot)}
+tr.bench td{color:var(--dim)}
+/* value: mono, right, with a heat cell behind it — colour carries magnitude, nothing else */
+td.v{position:relative;font-family:'IBM Plex Mono';font-weight:500;width:74px}
+td.v span{position:relative;z-index:1}
+td.v i{position:absolute;inset:3px 4px;background:var(--hot);opacity:var(--o);z-index:0}
+.st{font-family:'IBM Plex Sans Condensed';font-size:10px;font-weight:600;letter-spacing:.1em;padding:1px 4px;margin-left:6px}
+.st.out{background:var(--dead);color:#fff}
+.st.gtd{color:var(--hot);box-shadow:inset 0 0 0 1px var(--hot)}
+.spark{display:inline-block;width:46px;height:12px;vertical-align:-2px}
+
+/* ---- right column: stacked readouts, each its own strip ---- */
+.read{border-bottom:1px solid var(--line);padding:12px 14px}
+.read .lbl{display:block;margin-bottom:6px}
+.big{font-family:'IBM Plex Mono';font-size:54px;font-weight:400;line-height:.95;letter-spacing:-.04em}
+.big small{font-size:22px;color:var(--dim)}
+.gauge{height:4px;background:var(--line2);margin:10px 0 6px;position:relative}
+.gauge i{position:absolute;inset:0 auto 0 0;width:58%;background:var(--live)}
+.gauge::after{content:'';position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--dim)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:3px 10px;font-size:12px;color:var(--dim)}
+.kv b{font-family:'IBM Plex Mono';font-weight:500;color:var(--ink)}
+.cats{display:grid;gap:3px}
+.cats div{display:grid;grid-template-columns:30px 1fr 34px;align-items:center;gap:8px;font-size:11px}
+.cats .bar{height:7px;background:var(--line);position:relative}
+.cats .bar i{position:absolute;top:0;bottom:0}
+.cats .bar::after{content:'';position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--dimmer)}
+.cats span.r{text-align:right;font-family:'IBM Plex Mono';color:var(--dim)}
+
+.status{grid-column:2;display:flex;align-items:center;gap:0;border-top:1px solid var(--line);font-family:'IBM Plex Mono';font-size:11px;color:var(--dimmer)}
+.status span{padding:0 12px;border-right:1px solid var(--line);line-height:23px}
+.status .r{margin-left:auto;border:0}
+kbd{font-family:'IBM Plex Mono';font-size:10px;border:1px solid var(--line2);padding:1px 4px;color:var(--dim)}
+.mockbar{position:fixed;left:0;top:0;z-index:9;background:var(--hot);color:#140A02;font-family:'IBM Plex Sans Condensed';font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;padding:4px 10px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style></head><body>
+<div class="shell">
+  <nav class="rail">
+    <div class="mark"></div>
+    <a href="#" class="on"><span class="k">1</span>Team</a>
+    <a href="#"><span class="k">2</span>Week</a>
+    <a href="#"><span class="k">3</span>Wire</a>
+    <a href="#"><span class="k">4</span>Trade</a>
+    <a href="#"><span class="k">5</span>News</a>
+    <a href="#"><span class="k">6</span>Score</a>
+    <a href="#" style="margin-top:auto;padding-bottom:4px"><span class="k" style="font-size:12px">⌘K</span>Find</a>
+  </nav>
+
+  <div class="body">
+    <header class="bar">
+      <div class="cell"><span class="lbl">Week</span><b>1</b></div>
+      <div class="cell"><span class="lbl">Roster</span><b>13/13</b></div>
+      <div class="cell"><span class="lbl">Proj</span><b>1042</b><span class="lbl" style="letter-spacing:.06em">±96</span></div>
+      <div class="cell"><span class="lbl">Opp</span><b>1007</b><span class="lbl" style="letter-spacing:.06em">±88</span></div>
+      <div class="cell"><span class="lbl">Win</span><b style="color:var(--live)">58%</b></div>
+      <div class="cell"><span class="lbl">Games edge</span><b style="color:var(--live)">+3</b></div>
+      <div class="cell right"><span class="dot"></span><span class="live">ESPN live</span> · 15:28:04</div>
+    </header>
+
+    <div class="grid">
+      <section class="col">
+        <div class="alert">
+          <span class="tagx">Lineup</span>
+          <p><b>Brandon Ingram</b> is ruled out and holds your <b>PF/C</b> slot. Zach Edey is on the bench with 3 games.</p>
+          <button>Swap → Edey</button>
+        </div>
+        <div class="pane">
+          <table>
+            <thead><tr>
+              <th></th><th>Slot</th><th>Player</th><th class="r">G</th><th class="r">Value</th>
+              <th class="r">Fpts/g</th><th class="r">±</th><th>15-day form</th><th class="r">Own</th>
+            </tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="col" style="grid-template-rows:auto auto auto minmax(0,1fr)">
+        <div class="read">
+          <span class="lbl">Win probability · week 1</span>
+          <div class="big">58<small>%</small></div>
+          <div class="gauge"><i></i></div>
+          <div class="kv"><span>vs coin flip</span><b>+8 pts</b></div>
+        </div>
+        <div class="read">
+          <span class="lbl">The week rests on</span>
+          <div class="kv" style="margin-top:2px">
+            <span>Anthony Davis · 3 g</span><b>−14%</b>
+            <span>Austin Reaves · 3 g</span><b>−9%</b>
+            <span>Jayson Tatum · 2 g</span><b>−8%</b>
+            <span>Jamal Murray · 2 g</span><b>−6%</b>
+          </div>
+        </div>
+        <div class="read">
+          <span class="lbl">Category strength</span>
+          <div class="cats" id="cats"></div>
+        </div>
+        <div class="read" style="border-bottom:0;overflow:auto">
+          <span class="lbl">Cut first</span>
+          <div class="kv" style="margin-top:2px">
+            <span>Cedric Coward</span><b>1.9</b>
+            <span>Kyshawn George</span><b>1.7</b>
+          </div>
+          <p style="margin:10px 0 0;font-size:12px;color:var(--dim)">Both below replacement. The wire has 4 free agents above them.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="status">
+    <span>ESPN proj + stats.nba.com logs</span><span>form 20 Oct 03:11</span><span>dvp 2025-26</span>
+    <span>brier .185 vs .193 base</span>
+    <span class="r"><kbd>j/k</kbd> move <kbd>↵</kbd> open <kbd>d</kbd> drop <kbd>⌘K</kbd> find</span>
+  </div>
+</div>
+<div class="mockbar">Direction B — “Instrument” · mockup</div>
+<script>
+const R=[["PG","Austin Reaves","LAL · PG/SG",3,19.3,49.8,13,"",1,[4,6,5,8,6,7,9,7]],
+["SG","Norman Powell","CHI · SG/SF",3,10.3,40.7,13,"",1,[5,4,6,5,4,6,5,6]],
+["SF","Miles Bridges","PHX · SF/PF",2,6.3,36.8,14,"",1,[6,5,4,4,5,3,4,5]],
+["PF","Paul George","BOS · SF/PF",2,8.5,38.9,18,"",1,[3,6,4,7,5,4,6,5]],
+["C","Anthony Davis","WSH · PF/C",3,24.1,54.5,19,"",1,[7,8,6,9,8,7,9,8]],
+["G","Jamal Murray","DEN · PG",2,17.2,47.6,21,"",1,[5,8,4,7,9,5,7,6]],
+["F","Michael Porter Jr.","BKN · SF/PF",3,11.9,42.3,17,"",1,[6,5,7,5,6,5,7,6]],
+["PF/C","Brandon Ingram","LAC · SF/PF",3,12.0,42.4,17,"out",1,[6,6,5,7,6,0,0,0]],
+["UT","Franz Wagner","ORL · SF/PF",3,12.7,43.1,15,"gtd",1,[6,7,5,6,7,6,5,7]],
+["UT","Jayson Tatum","BOS · SF/PF",2,19.5,49.9,15,"",1,[8,7,9,7,8,9,7,8]],
+["BN","Zach Edey","MEM · C",3,4.8,35.2,19,"",0,[4,3,5,4,5,4,3,5]],
+["BN","Cedric Coward","MEM · SG/SF",3,1.9,32.4,10,"",0,[2,3,2,3,2,3,2,3]],
+["BN","Kyshawn George","WSH · SG/SF",3,1.7,32.1,17,"",0,[3,2,4,2,3,2,4,2]]];
+const max=24.1;
+const spark=a=>{const w=46,h=12,m=Math.max(...a)||1,
+ p=a.map((v,i)=>`${(i/(a.length-1)*w).toFixed(1)},${(h-v/m*(h-2)-1).toFixed(1)}`).join(' ');
+ return `<svg class="spark" viewBox="0 0 ${w} ${h}"><polyline points="${p}" fill="none" stroke="#7C838F" stroke-width="1"/></svg>`};
+document.getElementById('rows').innerHTML=R.map(([sl,n,t,g,v,fp,sw,st,start,f],i)=>`
+<tr class="${start?'start':'bench'} ${i===4?'sel':''}">
+ <td class="rk mono r">${i+1}</td>
+ <td class="sl">${sl}</td>
+ <td><span class="nm">${n}</span>${st?`<span class="st ${st}">${st.toUpperCase()}</span>`:''}<span class="tm">${t}</span></td>
+ <td class="r mono">${g}</td>
+ <td class="v r"><i style="--o:${(v/max*0.42).toFixed(2)}"></i><span>${v.toFixed(1)}</span></td>
+ <td class="r mono" style="color:var(--dim)">${fp.toFixed(1)}</td>
+ <td class="r mono" style="color:var(--dim)">${sw}</td>
+ <td>${spark(f)}</td>
+ <td class="r mono" style="color:var(--dim)">${[99,97,98,96,94,93,92,88,91,99,71,34,28][i]}%</td>
+</tr>`).join('');
+const C=[["PTS",2.9],["REB",1.4],["AST",0.6],["3PM",2.1],["STL",-0.8],["BLK",-1.6],["FG%",0.9],["FT%",-2.2],["TO",-0.4]];
+document.getElementById('cats').innerHTML=C.map(([k,z])=>`
+<div><span class="lbl" style="letter-spacing:.08em">${k}</span>
+<span class="bar"><i style="${z>=0?'left':'right'}:50%;width:${Math.min(50,Math.abs(z)*14)}%;background:${z>=0?'var(--live)':'var(--dead)'}"></i></span>
+<span class="r">${z>0?'+':''}${z.toFixed(1)}</span></div>`).join('');
+</script>
+</body></html>

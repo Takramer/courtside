@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Courtside — Direction A: Broadsheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600;700&family=Archivo+Narrow:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F3F0E9; --paper2:#EAE6DD; --ink:#16140F; --muted:#6E675C;
+  --rule:rgba(22,20,15,.16); --rule2:rgba(22,20,15,.34);
+  --accent:#B2341C; --cool:#2E5E7E;
+  --u:8px;
+  font-family:Archivo,system-ui,sans-serif; font-size:17px; line-height:1.55;
+  color:var(--ink); background:var(--paper);
+  -webkit-font-smoothing:antialiased;
+}
+*{box-sizing:border-box} body{margin:0}
+.wrap{max-width:1320px;margin:0 auto;padding:0 clamp(20px,4vw,72px) 120px}
+.num{font-variant-numeric:tabular-nums lining-nums}
+
+/* ---- masthead: a nameplate, not a nav bar ---- */
+.plate{display:grid;grid-template-columns:auto 1fr auto;align-items:end;gap:24px;padding:28px 0 10px;border-bottom:2px solid var(--ink)}
+.plate h1{font-family:'Instrument Serif',Georgia,serif;font-weight:400;font-size:46px;line-height:.9;letter-spacing:-.02em;margin:0}
+.plate .dek{font-family:'Archivo Narrow';font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding-bottom:5px}
+.plate .dek b{color:var(--ink);font-weight:600}
+nav{display:flex;gap:22px;align-items:baseline;padding:7px 0 9px;border-bottom:1px solid var(--rule);font-family:'Archivo Narrow';font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+nav a{color:var(--muted);text-decoration:none;padding-bottom:7px;margin-bottom:-10px;border-bottom:2px solid transparent}
+nav a.on{color:var(--ink);font-weight:700;border-bottom-color:var(--accent)}
+nav .right{margin-left:auto;color:var(--muted)}
+
+/* ---- the lede: one alert, one number, one instruction. 7 + 5. ---- */
+.lede{display:grid;grid-template-columns:7fr 5fr;gap:0 48px;padding:40px 0 0}
+.lede .hed{font-family:'Instrument Serif',Georgia,serif;font-weight:400;font-size:clamp(44px,5.6vw,76px);line-height:.96;letter-spacing:-.025em;margin:0 0 10px;max-width:16ch}
+.lede .hed em{font-style:italic;color:var(--accent)}
+.lede .sub{font-size:19px;line-height:1.5;color:var(--muted);max-width:52ch;margin:0}
+.lede .sub b{color:var(--ink);font-weight:600}
+.fix{display:inline-flex;align-items:center;gap:10px;margin-top:20px;font-family:'Archivo Narrow';font-size:13px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--paper);background:var(--ink);border:0;padding:11px 18px;cursor:pointer}
+.fix:hover{background:var(--accent)}
+
+/* odds slab, right column, hangs on the baseline of the headline */
+.odds{border-left:1px solid var(--rule);padding-left:32px}
+.odds .pct{font-family:'Instrument Serif',serif;font-size:132px;line-height:.82;letter-spacing:-.045em;margin:-10px 0 0;display:block}
+.odds .cap{font-family:'Archivo Narrow';font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.odds dl{display:grid;grid-template-columns:auto 1fr;gap:0;margin:18px 0 0;font-size:14px;border-top:1px solid var(--rule)}
+.odds dt{padding:7px 0;color:var(--muted)}
+.odds dd{padding:7px 0;margin:0;text-align:right;font-weight:600}
+.odds dt,.odds dd{border-bottom:1px solid var(--rule)}
+
+/* ---- section rule: a number, a label, a hairline ---- */
+.sec{margin-top:72px}
+.sechead{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--rule2);padding-bottom:7px}
+.sechead .no{font-family:'Archivo Narrow';font-size:11px;letter-spacing:.14em;color:var(--accent);font-weight:700}
+.sechead h2{font-family:'Instrument Serif',serif;font-weight:400;font-size:27px;letter-spacing:-.01em;margin:0}
+.sechead .note{margin-left:auto;font-size:13px;color:var(--muted)}
+.sechead .note a{color:var(--accent)}
+
+/* ---- the lineup, set as two agate columns like a box score ---- */
+.lineup{columns:2;column-gap:48px;column-rule:1px solid var(--rule);margin-top:18px}
+.lineup div{break-inside:avoid;display:grid;grid-template-columns:46px 1fr auto;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule)}
+.lineup .slot{font-family:'Archivo Narrow';font-weight:700;font-size:12px;letter-spacing:.1em;color:var(--muted)}
+.lineup .who{font-weight:600;font-size:16px}
+.lineup .g{font-family:'Archivo Narrow';font-size:12px;color:var(--muted);letter-spacing:.04em}
+.lineup div.alarm{background:rgba(178,52,28,.09);box-shadow:inset 3px 0 0 var(--accent);padding-left:9px;margin-left:-9px}
+.lineup div.alarm .who{color:var(--accent)}
+.bench{margin-top:12px;font-size:13px;color:var(--muted)}
+.bench b{font-family:'Archivo Narrow';letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--ink)}
+
+/* ---- agate table. 12px condensed, no zebra, no boxes. ---- */
+table{width:100%;border-collapse:collapse;margin-top:14px}
+thead th{font-family:'Archivo Narrow';font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 10px 6px;border-bottom:1px solid var(--rule2)}
+thead th.r{text-align:right}
+tbody td{padding:5px 10px;border-bottom:1px solid var(--rule);font-size:14px;vertical-align:baseline}
+tbody td.r{text-align:right}
+tbody td:first-child,thead th:first-child{padding-left:0}
+tbody td:last-child,thead th:last-child{padding-right:0}
+tbody tr:hover td{background:var(--paper2)}
+.rk{font-family:'Archivo Narrow';font-size:12px;color:var(--muted);width:20px}
+.nm{font-weight:600}
+.tm{font-family:'Archivo Narrow';font-size:12px;letter-spacing:.06em;color:var(--muted);margin-left:7px}
+/* VALUE is the one number that matters: bigger, serif, with a bar behind it */
+td.val{font-family:'Instrument Serif',serif;font-size:25px;line-height:1;letter-spacing:-.02em;width:96px;position:relative;padding-top:6px;padding-bottom:6px}
+td.val i{position:absolute;left:10px;right:10px;bottom:2px;height:2px;background:var(--rule);display:block}
+td.val i::after{content:'';position:absolute;left:0;top:0;bottom:0;width:var(--w);background:var(--accent)}
+td.sm{font-family:'Archivo Narrow';font-size:13px;letter-spacing:.03em;color:var(--muted)}
+.flag{font-family:'Archivo Narrow';font-size:10px;font-weight:700;letter-spacing:.1em;padding:1px 4px;margin-left:6px;vertical-align:2px}
+.flag.out{background:var(--accent);color:var(--paper)}
+.flag.gtd{box-shadow:inset 0 0 0 1px var(--cool);color:var(--cool)}
+tr.cut td{color:var(--muted)}
+tr.cut td.nmcell{text-decoration:none}
+
+/* ---- the cut list hangs in the margin, it is not a card ---- */
+.withmargin{display:grid;grid-template-columns:1fr 280px;gap:0 48px;align-items:start}
+.marginal{border-left:1px solid var(--rule);padding-left:28px;font-size:14px;color:var(--muted)}
+.marginal h3{font-family:'Archivo Narrow';font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);margin:0 0 10px;font-weight:700}
+.marginal li{list-style:none;padding:9px 0;border-bottom:1px solid var(--rule)}
+.marginal ul{margin:0;padding:0}
+.marginal b{color:var(--ink);display:block;font-size:15px}
+.marginal .act{background:none;border:0;padding:4px 0 0;font:inherit;font-size:13px;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+
+foot,.foot{display:block;margin-top:88px;padding-top:12px;border-top:2px solid var(--ink);font-family:'Archivo Narrow';font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.mockbar{background:var(--ink);color:var(--paper);font-family:'Archivo Narrow';font-size:11px;letter-spacing:.14em;text-transform:uppercase;padding:7px clamp(20px,4vw,72px)}
+@media(max-width:900px){.lede,.withmargin{grid-template-columns:1fr}.odds{border-left:0;border-top:1px solid var(--rule);padding:24px 0 0;margin-top:28px}.lineup{columns:1}.marginal{border-left:0;border-top:1px solid var(--rule);padding:24px 0 0;margin-top:28px}}
+</style></head><body>
+<div class="mockbar">Direction A — “Broadsheet” · mockup, real roster as of 20 Oct</div>
+<div class="wrap">
+
+  <header class="plate">
+    <h1>Courtside</h1>
+    <span class="dek">Mon 20 Oct · Week 1 · <b>Grace One Charlotte FBL</b></span>
+    <span class="dek">Claude, Win for me · 13/13</span>
+  </header>
+  <nav>
+    <a href="#" class="on">My team</a><a href="#">This week</a><a href="#">Waivers</a>
+    <a href="#">Trade</a><a href="#">News</a><a href="#">Scorecard</a><a href="#">Setup</a>
+    <span class="right">⌘K find a player</span>
+  </nav>
+
+  <section class="lede">
+    <div>
+      <h2 class="hed">You are starting a man who is <em>ruled out.</em></h2>
+      <p class="sub">Brandon Ingram holds your <b>PF/C</b> slot and will not play tonight. An out starter scores
+        nothing; Zach Edey on your bench scores something. Franz Wagner at <b>UT</b> is a game-time call — check him again after 6pm.</p>
+      <button class="fix">Swap Ingram → Edey</button>
+    </div>
+    <aside class="odds">
+      <span class="cap">Chance you win week 1</span>
+      <span class="pct num">58<span style="font-size:52px">%</span></span>
+      <dl>
+        <dt>Your projected final</dt><dd class="num">1,042 <span style="color:var(--muted);font-weight:400">±96</span></dd>
+        <dt>His</dt><dd class="num">1,007 <span style="color:var(--muted);font-weight:400">±88</span></dd>
+        <dt>Games-played edge</dt><dd class="num">+3</dd>
+        <dt>His biggest threat</dt><dd>Giannis, 4 g</dd>
+      </dl>
+    </aside>
+  </section>
+
+  <section class="sec">
+    <div class="sechead"><span class="no">01</span><h2>Start these ten</h2>
+      <span class="note">Set it in ESPN before the first tip. <a href="#">What the slots mean</a></span></div>
+    <div class="lineup">
+      <div><span class="slot">PG</span><span class="who">Austin Reaves</span><span class="g num">3 g</span></div>
+      <div><span class="slot">SG</span><span class="who">Norman Powell</span><span class="g num">3 g</span></div>
+      <div><span class="slot">SF</span><span class="who">Miles Bridges</span><span class="g num">2 g</span></div>
+      <div><span class="slot">PF</span><span class="who">Paul George</span><span class="g num">2 g</span></div>
+      <div><span class="slot">C</span><span class="who">Anthony Davis</span><span class="g num">3 g</span></div>
+      <div><span class="slot">G</span><span class="who">Jamal Murray</span><span class="g num">2 g</span></div>
+      <div><span class="slot">F</span><span class="who">Michael Porter Jr.</span><span class="g num">3 g</span></div>
+      <div class="alarm"><span class="slot">PF/C</span><span class="who">Brandon Ingram <span class="flag out">Out</span></span><span class="g num">3 g</span></div>
+      <div><span class="slot">UT</span><span class="who">Franz Wagner <span class="flag gtd">GTD</span></span><span class="g num">3 g</span></div>
+      <div><span class="slot">UT</span><span class="who">Jayson Tatum</span><span class="g num">2 g</span></div>
+    </div>
+    <p class="bench"><b>Bench</b> &nbsp;Zach Edey · Cedric Coward · Kyshawn George</p>
+  </section>
+
+  <section class="sec withmargin">
+    <div>
+      <div class="sechead"><span class="no">02</span><h2>The roster, best to worst</h2>
+        <span class="note">Value = points above a replacement-level free agent</span></div>
+      <table>
+        <thead><tr><th></th><th>Player</th><th class="r">Wk g</th><th class="r">Value</th><th>Form</th><th class="r">Fpts/g</th><th class="r">Swing</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <aside class="marginal">
+      <h3>Cut these first</h3>
+      <ul>
+        <li><b>Cedric Coward</b> Lowest value on the roster, 1.9. The easiest to replace.
+          <button class="act">I dropped him</button></li>
+        <li><b>Kyshawn George</b> 1.7, and Washington plays nobody worth streaming for.
+          <button class="act">I dropped him</button></li>
+      </ul>
+      <p style="margin:14px 0 0"><a href="#" style="color:var(--accent)">Find a replacement on Waivers →</a></p>
+    </aside>
+  </section>
+
+  <div class="foot">ESPN projections · RotoWire · Google News · updated 3:28 pm</div>
+</div>
+<script>
+const R=[["Anthony Davis","WSH · PF/C",3,24.1,"steady",54.5,19,""],
+["Jayson Tatum","BOS · SF/PF",2,19.5,"steady",49.9,15,""],
+["Austin Reaves","LAL · PG/SG",3,19.3,"steady",49.8,13,""],
+["Jamal Murray","DEN · PG",2,17.2,"steady",47.6,21,""],
+["Franz Wagner","ORL · SF/PF",3,12.7,"steady",43.1,15,"gtd"],
+["Brandon Ingram","LAC · SF/PF",3,12.0,"steady",42.4,17,"out"],
+["Michael Porter Jr.","BKN · SF/PF",3,11.9,"steady",42.3,17,""],
+["Norman Powell","CHI · SG/SF",3,10.3,"steady",40.7,13,""],
+["Paul George","BOS · SF/PF",2,8.5,"steady",38.9,18,""],
+["Miles Bridges","PHX · SF/PF",2,6.3,"steady",36.8,14,""],
+["Zach Edey","MEM · C",3,4.8,"steady",35.2,19,""],
+["Cedric Coward","MEM · SG/SF",3,1.9,"steady",32.4,10,""],
+["Kyshawn George","WSH · SG/SF",3,1.7,"steady",32.1,17,""]];
+const max=24.1;
+document.getElementById('rows').innerHTML=R.map(([n,t,g,v,f,fp,sw,fl],i)=>`
+<tr class="${v<3?'cut':''}">
+ <td class="rk num">${i+1}</td>
+ <td class="nmcell"><span class="nm">${n}</span>${fl?`<span class="flag ${fl}">${fl==='out'?'Out':'GTD'}</span>`:''}<span class="tm">${t}</span></td>
+ <td class="r num sm">${g}</td>
+ <td class="val r num">${v.toFixed(1)}<i style="--w:${Math.round(v/max*100)}%"></i></td>
+ <td class="sm">${f}</td>
+ <td class="r num sm">${fp.toFixed(1)}</td>
+ <td class="r num sm">±${sw}</td>
+</tr>`).join('');
+</script>
+</body></html>
