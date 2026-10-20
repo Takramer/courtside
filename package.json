@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "check": "node src/lib/model.check.js"
+    "check": "node src/lib/model.check.js",
+    "backtest": "node --no-warnings worker/backtest.mjs"
   },
   "dependencies": {
     "cmdk": "^1.1.1",

@@ -50,7 +50,7 @@ function Side({ ctx, side, today, label }) {
 
 // Turn one side of the ESPN matchup into something predict.js can price: a projection per
 // player, how many games he has left before Sunday, and who he draws in each of them.
-function priceSide(ctx, side, today, weekEnd, currentSeason) {
+function priceSide(ctx, side, today, weekEnd, currentSeason, now) {
   const out = []
   let unknown = 0
   for (const p of side.players) {
@@ -66,13 +66,17 @@ function priceSide(ctx, side, today, weekEnd, currentSeason) {
       news: ctx.newsBy.get(p.id),
     })
     const proj = projectPlayer({ espnFp, form, status, current: currentSeason })
-    const games = gamesBetween(ctx.teams[p.team], today, weekEnd)
+    // A game that has tipped off is already in ESPN's score, which goes in as banked points.
+    // Counting it here as well would price the same night twice.
+    // ponytail: a game in progress counts only what he has scored so far; the rest of his
+    // night is missing from the projection until the final buzzer, a few points at most.
+    const games = gamesBetween(ctx.teams[p.team], today, weekEnd).filter((g) => g.d > today || g.t > now)
     // One multiplier per night, in date order: a week against Washington is not a week
     // against Boston. Without the table every night counts at face value, as before.
     const adj = ctx.dvp
       ? games.map((g) => opponentFactor(ctx.dvp, ctx.teams[g.opp]?.abbrev, known?.pos || []))
       : null
-    out.push({ id: p.id, name: p.name, ...proj, games: games.length, adj })
+    out.push({ id: p.id, name: p.name, ...proj, games: games.length, dates: games.map((g) => g.d), adj })
   }
   return { players: out, unknown }
 }
@@ -91,11 +95,19 @@ export default function Matchup({ ctx }) {
   const currentSeason = ctx.formCurrent
   const odds = useMemo(() => {
     if (!d?.me || !d?.opp || !ctx.players.length) return null
-    const mine = priceSide(ctx, d.me, today, weekEnd, currentSeason)
-    const theirs = priceSide(ctx, d.opp, today, weekEnd, currentSeason)
+    const now = Date.now()
+    const mine = priceSide(ctx, d.me, today, weekEnd, currentSeason, now)
+    const theirs = priceSide(ctx, d.opp, today, weekEnd, currentSeason, now)
     if (!mine.players.length || !theirs.players.length) return null
-    return { ...weekOutlook(mine.players, theirs.players, { starts: slots.length, days: daysLeft }), unknown: mine.unknown + theirs.unknown }
-  }, [d, ctx.players, ctx.formBy, ctx.dvp, today, weekEnd, currentSeason, slots.length, daysLeft])
+    // What is already on the board counts. Until phase 9 a Thursday forecast compared only
+    // the games left, so a 300-point lead read as a coin flip.
+    return {
+      ...weekOutlook(mine.players, theirs.players, {
+        starts: slots.length, days: daysLeft, banked: [d.me.week || 0, d.opp.week || 0], sdScale: ctx.sdScale,
+      }),
+      unknown: mine.unknown + theirs.unknown,
+    }
+  }, [d, ctx.players, ctx.formBy, ctx.dvp, ctx.sdScale, today, weekEnd, currentSeason, slots.length, daysLeft])
 
   // Phase 8. Write this week's claim down the first time it is seen and never again: the
   // thing worth grading is what the model said before it knew. recordWeek ignores a week it
@@ -105,7 +117,7 @@ export default function Matchup({ ctx }) {
     ctx.setLedger((l) => recordWeek(l, {
       week: d.matchupPeriod,
       season: SEASON_TAG,
-      pWin: odds.pWin,
+      pWin: odds.pWin, pWinRaw: odds.pWinRaw, sdScale: odds.sdScale,
       myMu: odds.me.mu, mySd: odds.me.sd, myGames: odds.me.games,
       oppMu: odds.opp.mu, oppSd: odds.opp.sd, oppGames: odds.opp.games,
       me: d.me?.name ?? null, opp: d.opp?.name ?? null,
@@ -177,7 +189,7 @@ const pct = (x) => `${Math.round(x * 100)}%`
 
 // The odds, and the four things worth knowing about them.
 function Odds({ odds, updated, dvp }) {
-  const { pWin, me, opp, gameEdge, swing, danger, matchupEdge } = odds
+  const { pWin, me, opp, gameEdge, swing, danger, matchupEdge, sdScale } = odds
   const verdict = pWin > 0.8 ? 'You should win this'
     : pWin > 0.6 ? 'You are favoured'
       : pWin > 0.4 ? 'This is a coin flip'
@@ -197,8 +209,8 @@ function Odds({ odds, updated, dvp }) {
       </div>
 
       <ul className="oddsfacts">
-        <li><b>{fmt(me.mu, 0)}</b> <span>your projected total, give or take {fmt(me.sd, 0)}</span></li>
-        <li><b>{fmt(opp.mu, 0)}</b> <span>his, give or take {fmt(opp.sd, 0)}</span></li>
+        <li><b>{fmt(me.mu, 0)}</b> <span>your projected final, give or take {fmt(me.sd, 0)}{me.banked > 0 ? `, ${fmt(me.banked, 0)} of it already scored` : ''}</span></li>
+        <li><b>{fmt(opp.mu, 0)}</b> <span>his, give or take {fmt(opp.sd, 0)}{opp.banked > 0 ? `, ${fmt(opp.banked, 0)} already scored` : ''}</span></li>
         <li><b>{gameEdge > 0 ? `+${gameEdge}` : gameEdge}</b> <span>games played edge: {me.games} left against {opp.games}</span></li>
         {danger && <li><b>{fmt(danger.mu, 0)}</b> <span>his biggest threat: {danger.name}, over {danger.games} {danger.games === 1 ? 'game' : 'games'}</span></li>}
         {matchupEdge != null && (
@@ -237,10 +249,10 @@ function Odds({ odds, updated, dvp }) {
       <small className="oddsnote">
         Built on form from {updated ? new Date(updated).toLocaleDateString() : 'the last worker run'}
         {dvp ? `, and on ${dvp.season} defence by position` : ', with no defence table yet'}.
-        Player nights are treated as independent, which they are not quite — teammates share a
-        ball — so the extremes are a little overconfident. Nothing here is graded yet: that is
-        the next thing worth building, and until it exists treat the number as an argument,
-        not a fact.
+        A man's nights are priced as moving together, because a bad week is usually bad all
+        week; teammates sharing a ball are not, yet.
+        {sdScale && Math.abs(sdScale - 1) >= 0.01 ? ` Grading says the spread runs ${sdScale > 1 ? 'tight' : 'wide'}, so it is ${sdScale > 1 ? 'widened' : 'narrowed'} by ${Math.round(Math.abs(sdScale - 1) * 100)}%.` : ''}
+        {' '}How well this has held up is on the <a href="#scorecard">Scorecard</a>.
       </small>
     </section>
   )

@@ -117,17 +117,35 @@ export function opponentFactor(dvp, oppAbbrev, positions = []) {
  * opponentFactor above. A player facing Washington twice is worth more than the same player
  * facing Boston twice, and until phase 5 that difference was invisible here. No `adj` means
  * every game counts at face value, which is exactly what phases 3 and 4 did.
+ *
+ * Each player may also carry `dates`, one per remaining game, parallel to `adj`. With them
+ * the cap is applied night by night, which is how ESPN applies it: a Wednesday where twelve
+ * of your men play still starts ten, and a Monday where four play starts four. Without them
+ * the cap is pooled over the week, which is right on average and wrong on the nights that
+ * decide close weeks.
+ *
+ * `banked` is what the team has already scored this week. It has no spread — it happened —
+ * so it moves the total and leaves the variance alone.
  */
+// How sure we are of a player's level this week, as a share of his week. Nights are not
+// independent draws: the same man brings the same role, the same minutes and the same
+// sore ankle to all four of his games, so a bad week is bad all week. Without this term
+// the spread counted only night-to-night luck, and the replay of 2025-26 caught it — weeks
+// missed by half again what the model claimed, and its 93% weeks were won 82% of the time.
+// 0.3 was picked on the first half of that season and checked on the second, where it cut
+// the Brier score from 0.203 to 0.192. Re-run `npm run backtest` before changing it.
+const LEVEL_CV = 0.3
 const meanAdj = (p) => (p.adj?.length ? p.adj.reduce((a, b) => a + b, 0) / p.adj.length : 1)
 
-export function teamWeek(players, { starts = 10, days = 7 } = {}) {
+export function teamWeek(players, { starts = 10, days = 7, banked = 0, levelCv = LEVEL_CV } = {}) {
+  if (players.some((p) => p.dates?.length)) return nightly(players, starts, banked, levelCv)
   const ranked = [...players].sort((a, b) => b.mean * b.pPlay * meanAdj(b) - a.mean * a.pPlay * meanAdj(a))
   // You cannot start thirteen men in ten slots. Over the days left there are only so many
   // starts to give, and they go to your best players first — which is what you would do.
   // Without this the bench is counted as though it played, and a deep roster looks better
   // than it can ever be.
   let left = Math.max(0, starts * days)
-  let mu = 0
+  let mu = banked
   let variance = 0
   const perPlayer = []
   for (const p of ranked) {
@@ -144,6 +162,7 @@ export function teamWeek(players, { starts = 10, days = 7 } = {}) {
       pmu += day.mu
       pvar += day.variance
     }
+    pvar += (levelCv * pmu) ** 2
     mu += pmu
     variance += pvar
     perPlayer.push({ ...p, games: played, mu: pmu, variance: pvar })
@@ -151,9 +170,54 @@ export function teamWeek(players, { starts = 10, days = 7 } = {}) {
   return { mu, variance, sd: Math.sqrt(variance), players: perPlayer }
 }
 
-/** The chance my week beats his, under the bell-curve approximation above. */
-export function winProbability(me, opp) {
-  const sd = Math.sqrt(me.variance + opp.variance)
+// The cap, one night at a time. Each night the men with a game are taken best first, and
+// each one uses up as much of a slot as he is likely to fill: a starter who is 90% to play
+// leaves a tenth of his slot to whoever is next. So the eleventh man on a busy night is not
+// worth nothing — he is the cover for the ten in front of him — and on a quiet night he is
+// worth his full self. A man is counted on a night only if he is more likely than not to
+// have a slot, which is what `games` reports.
+// ponytail: expected slot share, not an exact lineup. The exact answer is a sum over every
+// combination of who sits; for ten slots that is 2^13 cases a night and changes the total
+// by a point or two.
+function nightly(players, starts, banked, levelCv) {
+  const nights = new Map()
+  players.forEach((p, k) => (p.dates || []).forEach((d, i) => {
+    if (!nights.has(d)) nights.set(d, [])
+    nights.get(d).push({ k, f: p.adj?.[i] ?? 1 })
+  }))
+  const acc = players.map(() => ({ mu: 0, variance: 0, games: 0 }))
+  for (const slate of nights.values()) {
+    slate.sort((a, b) => players[b.k].mean * players[b.k].pPlay * b.f - players[a.k].mean * players[a.k].pPlay * a.f)
+    let room = starts
+    for (const { k, f } of slate) {
+      const p = players[k]
+      const share = Math.min(1, Math.max(0, room))
+      room -= p.pPlay
+      if (!share) continue
+      const day = playerDay({ mean: p.mean * f, sd: p.sd * f, pPlay: p.pPlay * share })
+      acc[k].mu += day.mu
+      acc[k].variance += day.variance
+      if (share >= 0.5) acc[k].games++
+    }
+  }
+  for (const x of acc) x.variance += (levelCv * x.mu) ** 2
+  const perPlayer = players.map((p, k) => ({ ...p, ...acc[k] }))
+    .sort((a, b) => b.mu - a.mu)
+  const mu = banked + acc.reduce((n, x) => n + x.mu, 0)
+  const variance = acc.reduce((n, x) => n + x.variance, 0)
+  return { mu, variance, sd: Math.sqrt(variance), players: perPlayer }
+}
+
+/**
+ * The chance my week beats his, under the bell-curve approximation above.
+ *
+ * `scale` widens the spread by what grading measured. The independence assumption at the top
+ * makes every week look more certain than it is; the replay of last season and the ledger
+ * both measure by how much, and this is where that measurement is paid back. 1 means trust
+ * the raw spread.
+ */
+export function winProbability(me, opp, scale = 1) {
+  const sd = scale * Math.sqrt(me.variance + opp.variance)
   if (!sd) return me.mu === opp.mu ? 0.5 : me.mu > opp.mu ? 1 : 0
   return normalCdf((me.mu - opp.mu) / sd)
 }
@@ -162,10 +226,11 @@ export function winProbability(me, opp) {
  * The probability alone is a party trick. This is the part you act on: who moves the number,
  * by how much, and whether the week is being decided by players or by the calendar.
  */
-export function weekOutlook(mine, theirs, opts = {}) {
-  const me = teamWeek(mine, opts)
-  const opp = teamWeek(theirs, opts)
-  const pWin = winProbability(me, opp)
+export function weekOutlook(mine, theirs, { banked = [0, 0], sdScale = 1, ...opts } = {}) {
+  const mineOpts = { ...opts, banked: banked[0] }
+  const me = teamWeek(mine, mineOpts)
+  const opp = teamWeek(theirs, { ...opts, banked: banked[1] })
+  const pWin = winProbability(me, opp, sdScale)
 
   // What the number becomes if one of mine sits the whole week. Recomputed, not estimated,
   // because "he is 8% of my week" and "losing him costs 8 points of win probability" are
@@ -173,8 +238,8 @@ export function weekOutlook(mine, theirs, opts = {}) {
   const swing = me.players
     .filter((p) => p.games > 0)
     .map((p) => {
-      const without = teamWeek(mine.filter((x) => x.id !== p.id), opts)
-      return { id: p.id, name: p.name, games: p.games, points: +p.mu.toFixed(1), cost: +(pWin - winProbability(without, opp)).toFixed(4) }
+      const without = teamWeek(mine.filter((x) => x.id !== p.id), mineOpts)
+      return { id: p.id, name: p.name, games: p.games, points: +p.mu.toFixed(1), cost: +(pWin - winProbability(without, opp, sdScale)).toFixed(4) }
     })
     .sort((a, b) => b.cost - a.cost)
 
@@ -184,13 +249,17 @@ export function weekOutlook(mine, theirs, opts = {}) {
   // What the opponent adjustment is actually worth to me this week. Without it there is no
   // way to tell whether the defence table is doing work or just adding decimal places, and
   // a model you cannot audit from the outside is a model you have to take on faith.
-  const flat = teamWeek(mine.map((p) => ({ ...p, adj: null })), opts)
+  const flat = teamWeek(mine.map((p) => ({ ...p, adj: null })), mineOpts)
   const matchupEdge = mine.some((p) => p.adj?.length) ? +(me.mu - flat.mu).toFixed(1) : null
 
   return {
     pWin,
-    me: { mu: +me.mu.toFixed(1), sd: +me.sd.toFixed(1), games: myGames },
-    opp: { mu: +opp.mu.toFixed(1), sd: +opp.sd.toFixed(1), games: oppGames },
+    // The same week before grading widened it. Recorded beside pWin so the ledger can keep
+    // measuring the raw model rather than its own correction.
+    pWinRaw: winProbability(me, opp),
+    sdScale,
+    me: { mu: +me.mu.toFixed(1), sd: +me.sd.toFixed(1), games: myGames, banked: banked[0] },
+    opp: { mu: +opp.mu.toFixed(1), sd: +opp.sd.toFixed(1), games: oppGames, banked: banked[1] },
     gameEdge: myGames - oppGames,
     matchupEdge,
     swing: swing.slice(0, 5),

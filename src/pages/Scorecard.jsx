@@ -5,7 +5,102 @@ import { Tip, fmt } from '../components.jsx'
 import './season.css'
 
 const pct = (x) => `${Math.round(x * 100)}%`
-const signed = (x, d = 1) => (x > 0 ? `+${fmt(x, d)}` : fmt(x, d))
+// Rounded before the sign is chosen, so a gap of -0.4 reads 0 rather than -0.
+const signed = (x, d = 1) => { const r = +x.toFixed(d) || 0; return r > 0 ? `+${fmt(r, d)}` : fmt(r, d) }
+
+// Forecasts grouped by how sure they were, against how often those weeks were won.
+function Buckets({ rows }) {
+  return (
+    <table className="t">
+      <thead><tr>
+        <th>When it said</th><th className="num">Weeks</th>
+        <th className="num">It meant</th><th className="num">Won</th><th className="num">Gap</th>
+      </tr></thead>
+      <tbody>
+        {rows.map((b) => (
+          <tr key={b.from}>
+            <td>{pct(b.from)}&ndash;{pct(b.to)}</td>
+            <td className="num">{b.n}</td>
+            <td className="num">{pct(b.said)}</td>
+            <td className="num strong">{pct(b.actual)}</td>
+            <td className="num" style={{ color: Math.abs(b.actual - b.said) > 0.2 ? 'var(--bad)' : undefined }}>
+              {signed((b.actual - b.said) * 100, 0)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+// Phase 9. The ledger needs a season before its probability can be read; this needs none.
+// Last season, one week at a time, priced with only what was known that Monday.
+function Replay({ bt, sdScale }) {
+  if (!bt) {
+    return (
+      <section className="odds">
+        <h3>Last season, replayed</h3>
+        <p className="lead">Not run yet. <code>npm run backtest</code> on the Mac writes it, in about a second.</p>
+      </section>
+    )
+  }
+  const { points: p, holdout: h, dvp, level } = bt
+  const dvpNote = Math.abs(dvp.brierWith - dvp.brierWithout) < 0.001 ? 'no measurable difference'
+    : dvp.brierWith < dvp.brierWithout ? 'it helps' : 'it hurts'
+  return (
+    <section className="odds">
+      <h3>Last season, replayed</h3>
+      <p className="lead">
+        {bt.graded.toLocaleString()} matchups from {bt.season}, in {bt.leagues} imaginary leagues.
+        Each was priced on its Monday with only the games before it, then played out of the
+        real box scores. Form only: no ESPN projection and no injury report, so it grades the
+        spread, availability, the nightly lineup cap and the bell curve — not the whole engine.
+      </p>
+      <div className="oddshead">
+        <span className="big" style={{ color: bt.brier < bt.baseline ? 'var(--good)' : 'var(--bad)' }}>{fmt(bt.brier, 3)}</span>
+        <div>
+          <b>{bt.brier < bt.baseline ? 'Better than a coin' : 'Worse than a coin — this is broken'}</b>
+          <small>Brier score against {fmt(bt.baseline, 2)} for saying &ldquo;50%&rdquo; every week.</small>
+        </div>
+      </div>
+      <ul className="oddsfacts">
+        <li>
+          <b>{pct(p.within1sd)}</b>
+          <span>landed inside its own spread — it claims {pct(p.expected1sd)}</span>
+        </li>
+        <li>
+          <b>{signed(p.bias)}</b>
+          <span>
+            <Tip text="Actual minus projected, per team-week. Negative means it projects high. Part of this is the replay itself: form alone, with no ESPN projection to pull a hot streak back to earth.">bias</Tip>
+            {' '}per team-week, typical miss {fmt(p.mae, 0)}
+          </span>
+        </li>
+        {level && (
+          <li>
+            <b>{fmt(level.brierWithout, 3)}</b>
+            <span>
+              <Tip text="The same weeks with every night priced as an independent draw. The gap is what pricing a man's nights as moving together is worth.">if every night were independent</Tip>
+            </span>
+          </li>
+        )}
+        <li>
+          <b>{fmt(dvp.brierWithout, 3)}</b>
+          <span>without the defence table — {dvpNote}</span>
+        </li>
+        <li>
+          <b>&times;{fmt(sdScale, 2)}</b>
+          <span>
+            <Tip text={`The live spread correction: this replay as the starting point, your graded weeks taking over as they come in. Fitted on the first ${h.fitWeeks} replayed weeks alone, it moved the other ${h.testWeeks} from ${fmt(h.brierRaw, 3)} to ${fmt(h.brierScaled, 3)}.`}>spread correction</Tip>
+            {' '}on this week&rsquo;s odds
+          </span>
+        </li>
+      </ul>
+      <h4>Where it is wrong</h4>
+      <Buckets rows={bt.buckets} />
+      <small className="muted">Replayed {new Date(bt.updated).toLocaleDateString()}. {bt.note}</small>
+    </section>
+  )
+}
 
 export default function Scorecard({ ctx }) {
   const conn = ctx.espn.league && ctx.espn.team ? ctx.espn : null
@@ -27,18 +122,19 @@ export default function Scorecard({ ctx }) {
 
   if (!conn) {
     return (
-      <div className="page narrow">
+      <div className="page narrow scorecard">
         <h1>Scorecard</h1>
         <p className="lead">
           Grading needs your league connected: the forecast comes from here, the result comes from ESPN.
         </p>
         <p><a className="btn" href="#league">Connect my league</a></p>
+        <Replay bt={ctx.backtest} sdScale={ctx.sdScale} />
       </div>
     )
   }
 
   return (
-    <div className="page narrow season">
+    <div className="page narrow season scorecard">
       <div className="pagehead">
         <div>
           <h1>Scorecard</h1>
@@ -51,6 +147,10 @@ export default function Scorecard({ ctx }) {
       </div>
 
       {hist.error && <p className="banner bad">Could not read past weeks from ESPN: {hist.error}</p>}
+
+      <Replay bt={ctx.backtest} sdScale={ctx.sdScale} />
+
+      <h3>Your league, this season</h3>
 
       {s.graded === 0 ? (
         <div className="emptystate">
@@ -71,11 +171,11 @@ export default function Scorecard({ ctx }) {
               the part worth reading early.
             </p>
             <ul className="oddsfacts">
-              <li><b>{s.points.n}</b> <span>weeks graded</span></li>
+              <li><b>{s.points.n}</b> <span>team-weeks graded, yours and his</span></li>
               <li>
                 <b>{signed(s.points.bias)}</b>
                 <span>
-                  <Tip text="Average of actual minus predicted. Positive means the projection runs low: your team scores more than it says. A steady bias is the easiest thing here to fix.">bias</Tip>
+                  <Tip text="Average of actual minus predicted. Positive means the projection runs low: teams score more than it says. A steady bias is the easiest thing here to fix.">bias</Tip>
                   {' '}per week{s.points.bias > 0 ? ' — it is projecting low' : s.points.bias < 0 ? ' — it is projecting high' : ''}
                 </span>
               </li>
@@ -91,9 +191,9 @@ export default function Scorecard({ ctx }) {
                 </span>
               </li>
             </ul>
-            {s.points.n < 6 && (
+            {s.points.n < 12 && (
               <small className="muted">
-                {s.points.n} week{s.points.n > 1 ? 's' : ''} is not enough to call any of this a
+                {s.points.n} team-week{s.points.n > 1 ? 's' : ''} is not enough to call any of this a
                 pattern. It is here so it accumulates, not so it can be read today.
               </small>
             )}
@@ -125,25 +225,7 @@ export default function Scorecard({ ctx }) {
             {s.buckets.length > 0 && (
               <>
                 <h4>Where it is wrong</h4>
-                <table className="t">
-                  <thead><tr>
-                    <th>When it said</th><th className="num">Weeks</th>
-                    <th className="num">It meant</th><th className="num">You won</th><th className="num">Gap</th>
-                  </tr></thead>
-                  <tbody>
-                    {s.buckets.map((b) => (
-                      <tr key={b.from}>
-                        <td>{pct(b.from)}&ndash;{pct(b.to)}</td>
-                        <td className="num">{b.n}</td>
-                        <td className="num">{pct(b.said)}</td>
-                        <td className="num strong">{pct(b.actual)}</td>
-                        <td className="num" style={{ color: Math.abs(b.actual - b.said) > 0.2 ? 'var(--bad)' : undefined }}>
-                          {signed((b.actual - b.said) * 100, 0)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <Buckets rows={s.buckets} />
                 <small className="muted">
                   A model can be right overall and badly wrong in one band. Over-confidence
                   shows up here as a big negative gap in the 70&ndash;100% rows.

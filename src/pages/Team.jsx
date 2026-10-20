@@ -168,7 +168,7 @@ export default function Team({ ctx }) {
                 </div>
               ))}
             </div>
-            <p>Strongest: <b>{ranked.slice(0, 3).map((c) => c.name).join(', ')}</b>. Weakest: <b>{ranked.slice(-2).map((c) => c.name).join(', ')}</b>. When you pick up or trade for players, favor ones who help your weak spots without hurting the strong ones, or give up on a weak category entirely (see "punting" in <a href="#learn">Learn</a>).</p>
+            <p>Strongest: <b>{ranked.slice(0, 3).map((c) => c.name).join(', ')}</b>. Weakest: <b>{ranked.slice(-2).map((c) => c.name).join(', ')}</b>. When you pick up or trade for players, favor ones who help your weak spots without hurting the strong ones, or give up on a weak category entirely.</p>
           </section>
         )}
 

@@ -123,6 +123,33 @@ assert.equal(squeeze.players.find((p) => p.name === 'Bench').games, 0)
 assert.equal(squeeze.players.find((p) => p.name === 'Best').games, 1)
 assert.ok(Math.abs(squeeze.mu - 80) < 1e-9, 'only the two who start are counted')
 
+// Night by night, the cap bites only where it should. Same three men: all on one night and
+// the third sits; spread over three nights and all three count.
+const trio = (dates) => [{ id: 1, name: 'Best', mean: 50, sd: 10, pPlay: 1, games: 1, dates: [dates[0]] },
+                         { id: 2, name: 'Good', mean: 30, sd: 8, pPlay: 1, games: 1, dates: [dates[1]] },
+                         { id: 3, name: 'Bench', mean: 9, sd: 3, pPlay: 1, games: 1, dates: [dates[2]] }]
+const busy = P.teamWeek(trio(['mon', 'mon', 'mon']), { starts: 2 })
+assert.ok(Math.abs(busy.mu - 80) < 1e-9 && busy.players.find((p) => p.name === 'Bench').games === 0)
+assert.ok(Math.abs(P.teamWeek(trio(['mon', 'tue', 'wed']), { starts: 2 }).mu - 89) < 1e-9, 'a quiet night starts everyone')
+// The man behind a doubtful starter is his cover: two coin flips in front of him leave a whole slot.
+const cover = P.teamWeek(trio(['mon', 'mon', 'mon']).map((p) => (p.id < 3 ? { ...p, pPlay: 0.5 } : p)), { starts: 2 })
+assert.ok(Math.abs(cover.players.find((p) => p.name === 'Bench').mu - 9) < 1e-9)
+// Points already scored move the total and add no doubt: they happened.
+const bank = P.teamWeek(trio(['mon', 'tue', 'wed']), { starts: 2, banked: 400 })
+assert.ok(Math.abs(bank.mu - 489) < 1e-9 && bank.sd === P.teamWeek(trio(['mon', 'tue', 'wed']), { starts: 2 }).sd)
+// So a big Thursday lead wins the week even against a better remaining roster.
+const ahead = P.weekOutlook(trio(['mon', 'tue', 'wed']), trio(['mon', 'tue', 'wed']).map((p) => ({ ...p, mean: p.mean * 1.5 })),
+  { starts: 2, banked: [300, 0] })
+assert.ok(ahead.pWin > 0.9 && ahead.me.mu > ahead.opp.mu, `a 300-point lead is not a coin flip: ${ahead.pWin}`)
+// A man's nights move together, so the level term widens the week and leaves its middle alone.
+const lone = [{ id: 1, name: 'A', mean: 40, sd: 10, pPlay: 1, games: 4 }]
+assert.equal(P.teamWeek(lone, { levelCv: 0 }).mu, P.teamWeek(lone).mu)
+assert.ok(P.teamWeek(lone).sd > P.teamWeek(lone, { levelCv: 0 }).sd)
+assert.ok(Math.abs(P.teamWeek(lone, { levelCv: 0 }).variance - 400) < 1e-9, 'with it off, four independent nights')
+// Widening the spread pulls a favourite back towards a coin, and never past it.
+const fav = [P.teamWeek(lone), P.teamWeek([{ ...lone[0], mean: 30 }])]
+assert.ok(P.winProbability(...fav, 1.5) < P.winProbability(...fav) && P.winProbability(...fav, 1.5) > 0.5)
+
 // ---------- phase 5: the opponent adjustment ----------
 const DVP = { teams: { WAS: { G: { mult: 1.11 }, F: { mult: 1.11 }, C: { mult: 1.1 } },
                        BOS: { G: { mult: 0.93 }, F: { mult: 0.92 }, C: { mult: 0.94 } } } }
@@ -345,4 +372,55 @@ assert.equal(G.isFullWeek({ daysLeft: 7 }), true)
 assert.equal(G.isFullWeek({ daysLeft: 4 }), false)
 assert.equal(G.score(build([{ w: 1, p: 0.6, mu: 1400, my: 1450, opp: 1300, d: 3 }])).fullWeek, 0)
 
+// His total was projected too, so it is graded too, and the margin gets its own spread check.
+const twoSided = G.score(G.settle(G.recordWeek({}, { week: 1, pWin: 0.6, myMu: 1400, mySd: 100, oppMu: 1300, oppSd: 100, daysLeft: 7 }),
+  [{ week: 1, my: 1500, opp: 1300 }]))
+assert.equal(twoSided.points.n, 2)
+assert.equal(twoSided.points.bias, 50) // +100 on mine, 0 on his
+assert.equal(twoSided.points.z2, 0.5) // (1^2 + 0^2) / 2
+assert.equal(twoSided.margin.z2, 0.5) // a 100-point miss on the margin, against sqrt(2) * 100
+// The spread correction: untouched with nothing to go on, the replay's answer with only the
+// replay, the ledger's answer once the ledger outweighs it, and never past the clip.
+assert.equal(G.spreadScale(), 1)
+assert.equal(G.spreadScale({ replay: { z2: 2.25 } }), 1.5)
+assert.ok(Math.abs(G.spreadScale({ replay: { z2: 2.25 }, ledger: { n: 4000, z2: 1 } }) - 1) < 0.01)
+assert.equal(G.spreadScale({ replay: { z2: 9 } }), 1.6)
+
 console.log('grading checks pass')
+
+// ---------- phase 9: the replay ----------
+const B = await import('../../worker/backtest.mjs')
+// Two teams playing each other Monday, Wednesday and Friday for six weeks, two men each.
+const replayLogs = (boost = 1) => {
+  const out = []
+  let gid = 0
+  for (let wk = 0; wk < 6; wk++) {
+    for (const day of [0, 2, 4]) {
+      const date = new Date(Date.UTC(2025, 9, 20 + wk * 7 + day)).toISOString().slice(0, 10)
+      gid++
+      const wobble = ((gid % 3) - 1) * 6
+      const last = wk === 5 ? boost : 1
+      for (const [pid, team, opp, fp] of [[1, 'AAA', 'BBB', 50], [2, 'AAA', 'BBB', 22], [3, 'BBB', 'AAA', 40], [4, 'BBB', 'AAA', 30]]) {
+        out.push({ pid, gid: String(gid), date, team, opp, min: 30, fp: (fp + wobble) * last })
+      }
+    }
+  }
+  return out
+}
+const rOpts = { pos: { 1: 'G', 2: 'F', 3: 'G', 4: 'C' }, leagues: 1, teams: 2, roster: 2, starts: 2, skipWeeks: 2 }
+const plain = B.replay(replayLogs(), rOpts)
+assert.equal(Object.keys(plain).length, 4, 'weeks 3 to 6, one matchup each')
+assert.ok(Object.values(plain).every((e) => e.daysLeft === 7 && e.pWin > 0 && e.pWin < 1 && e.final.my > 0))
+// No peeking: a final week ten times bigger changes what happened, never what was said.
+const peek = B.replay(replayLogs(10), rOpts)
+const lastWk = Math.max(...Object.values(plain).map((e) => e.wk))
+for (const [k, e] of Object.entries(plain)) {
+  assert.equal(peek[k].myMu, e.myMu)
+  assert.equal(peek[k].pWin, e.pWin)
+  if (e.wk === lastWk) assert.ok(peek[k].final.my > e.final.my * 5, 'the box score is what changed')
+}
+// The defence table is rebuilt from the games before Monday, with cameos left out.
+const cameo = B.dvpFrom([{ pid: 1, opp: 'BBB', min: 4, fp: 90 }], { 1: 'G' })
+assert.deepEqual(cameo.teams, {})
+console.log('replay checks pass')
+

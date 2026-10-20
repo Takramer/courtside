@@ -4,6 +4,7 @@ import { useEspnLeague } from './lib/espn.js'
 import { clearToken, tokenInUrl, unpack } from './lib/link.js'
 import { computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, normName, tagNews } from './lib/model.js'
 import { availability } from './lib/predict.js'
+import { score, spreadScale } from './lib/grade.js'
 import { Toaster, toast } from 'sonner'
 import { PlayerDrawer, PlayerFinder } from './components.jsx'
 import Team from './pages/Team.jsx'
@@ -13,7 +14,6 @@ import Trade from './pages/Trade.jsx'
 import News from './pages/News.jsx'
 import League from './pages/League.jsx'
 import Scorecard from './pages/Scorecard.jsx'
-import Learn from './pages/Learn.jsx'
 
 const TABS = [
   ['team', 'My team', Team],
@@ -23,7 +23,6 @@ const TABS = [
   ['news', 'News', News],
   ['scorecard', 'Scorecard', Scorecard],
   ['league', 'League setup', League],
-  ['learn', 'Learn', Learn],
 ]
 
 const OWNER_MSG = { mine: 'added to your team', taken: 'marked taken by another team', free: 'marked available' }
@@ -55,6 +54,7 @@ export default function App() {
   const ddata = useFetch('/data/dvp.json')  // same worker: what each team gives up by position
   const mdata = useFetch('/data/matchups.json') // defender vs scorer, possession by possession
   const xdata = useFetch('/data/friction.json') // flagrants and double technicals, both men named
+  const bdata = useFetch('/data/backtest.json') // npm run backtest: last season replayed through the engine
   // v3: the real ESPN slots (PF/C, two UT) replace the old three-UT guess; a new key drops the settings saved under it
   const [settings, setSettings] = useLocal('cs.settings.v3', DEFAULT_SETTINGS)
   const [mine, setMine] = useLocal('cs.mine', [])
@@ -150,6 +150,10 @@ export default function App() {
     return new Map(players.map((p) => [p.id, by.get(normName(p.name))]).filter(([, v]) => v))
   }, [fdata.data, players])
 
+  // How far to widen the live odds: last season's replay as the prior, your own graded weeks
+  // as the evidence, the second taking over as the season fills in.
+  const sdScale = useMemo(() => spreadScale({ replay: bdata.data?.margin, ledger: score(ledger).margin }), [bdata.data, ledger])
+
   const mineSet = new Set(mine); const takenSet = new Set(taken)
   // One resolver for the whole app (phase 7). It was two, and they had drifted: the matchup
   // page read the fantasy flag while everything else read the injury report, so a player
@@ -177,7 +181,7 @@ export default function App() {
 
   const ctx = {
     isFree, exactTaken, espn, setEspn, league, linked,
-    players, byId, teams, values, formBy, formUpdated: fdata.data?.updated, formCurrent: !!fdata.data?.is_current_season, dvp: ddata.data, dvpUpdated: ddata.data?.updated, matchups: mdata.data, friction: xdata.data, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
+    players, byId, teams, values, formBy, formUpdated: fdata.data?.updated, formCurrent: !!fdata.data?.is_current_season, dvp: ddata.data, dvpUpdated: ddata.data?.updated, matchups: mdata.data, friction: xdata.data, backtest: bdata.data, sdScale, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
     newsBy, injuryBy, offCourtBy, status, avail, ledger, setLedger, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
     myPlayers: mine.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => (values.get(b.id)?.val ?? -99) - (values.get(a.id)?.val ?? -99)),
   }
