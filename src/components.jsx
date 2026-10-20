@@ -10,6 +10,11 @@ export const ago = (iso) => {
   return h < 1 ? `${Math.max(1, Math.round(h * 60))}m ago` : h < 48 ? `${Math.round(h)}h ago` : `${Math.round(h / 24)}d ago`
 }
 
+// Value's heat. Linear opacity made everyone below about a third of the best player look
+// identically black, so the curve lifts the low end: 1.9 and 11.9 are both "replaceable",
+// but only one of them is nearly worthless. Gamma 0.6, ceiling 0.5.
+export const heat = (val, max) => ({ '--o': (Math.max(0, val ?? 0) / (max || 1)) ** 0.6 * 0.5 })
+
 export function Tip({ children, text }) {
   return <span className="tip" title={text} tabIndex={0} data-tip={text}>{children}</span>
 }

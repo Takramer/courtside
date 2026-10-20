@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { bestLineup, etToday, gamesBetween, weekBounds } from '../lib/model.js'
-import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt } from '../components.jsx'
+import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt, heat } from '../components.jsx'
 import './season.css'
 
 export function PlayerSearch({ ctx, onPick, filter = () => true, placeholder = 'Add a player: type a name' }) {
@@ -124,7 +124,9 @@ function Events({ ctx, myPlayers }) {
 export default function Team({ ctx }) {
   const { myPlayers, values, settings, teams } = ctx
   const [, weekEnd] = weekBounds(etToday())
-  const [order, setOrder] = useState('lineup')
+  // Best to worst is how he has always read this roster, so that is the default. The slot
+  // column means lineup order is one click away without being the thing you land on.
+  const [order, setOrder] = useState('value')
   const cats = catHeaders(settings)
   const games = (p) => gamesBetween(teams[p.team], etToday(), weekEnd).length
 
@@ -179,15 +181,15 @@ export default function Team({ ctx }) {
           <div className="scroll deskscroll">
             <table className="t roster">
               <thead><tr>
-                <th className="num" style={{ width: 26 }}>#</th>
+                <th className="num rk" style={{ width: 26 }}>#</th>
                 <th><Tip text="Where he goes in your ESPN lineup. G = any guard, F = any forward, PF/C = power forward or centre, UT = anyone, BN = bench and scores nothing.">Slot</Tip></th>
                 <th className="stick">Player</th>
                 <th className="num"><Tip text="Games left this week (Mon–Sun). More games means more stats.">G</Tip></th>
                 <th className="num"><ValueTip settings={settings} /></th>
                 {settings.format === 'cats' ? cats.map((c) => <th key={c.k} className="num" title={c.name}>{c.label}</th>) : <th className="num"><Tip text="Fantasy points per game, projected.">Fpts/g</Tip></th>}
-                <th className="num"><Tip text="How much he swings game to game, from last season's logs. A 30-point average that swings 18 is a different player from one that swings 6: the steady one wins close weeks, the wild one is how you win a week you should lose.">±</Tip></th>
-                <th className="num"><Tip text="Share of his team's games he actually played last season. 79% means he sat roughly one night in five.">Avl</Tip></th>
-                <th><Tip text="Last 15 days compared with his usual level.">Form</Tip></th>
+                <th className="num opt"><Tip text="How much he swings game to game, from last season's logs. A 30-point average that swings 18 is a different player from one that swings 6: the steady one wins close weeks, the wild one is how you win a week you should lose.">±</Tip></th>
+                <th className="num opt"><Tip text="Share of his team's games he actually played last season. 79% means he sat roughly one night in five.">Avl</Tip></th>
+                <th className="opt"><Tip text="Last 15 days compared with his usual level.">Form</Tip></th>
                 <th />
               </tr></thead>
               <tbody>
@@ -202,11 +204,11 @@ export default function Team({ ctx }) {
                       <td className="slot">{slot}</td>
                       <td className="stick"><PlayerName ctx={ctx} p={p} /></td>
                       <td className="num">{games(p)}</td>
-                      <td className="heat"><i style={{ '--o': Math.max(0, (v?.val ?? 0) / maxVal * 0.42) }} /><span>{fmt(v?.val)}</span></td>
+                      <td className="heat"><i style={heat(v?.val, maxVal)} /><span>{fmt(v?.val)}</span></td>
                       {settings.format === 'cats' ? cats.map((c) => <ZCell key={c.k} z={v?.z[c.k]} />) : <td className="num muted">{fmt(v?.fp)}</td>}
-                      <td className="num muted">{f ? fmt(f.fp_sd, 0) : '–'}</td>
-                      <td className="num muted">{f?.avail != null ? `${Math.round(f.avail * 100)}%` : '–'}</td>
-                      <td>{hot ? <Tip text="Playing well above his usual level lately. Keep starting him."><span className="tag good">hot</span></Tip>
+                      <td className="num muted opt">{f ? fmt(f.fp_sd, 0) : '–'}</td>
+                      <td className="num muted opt">{f?.avail != null ? `${Math.round(f.avail * 100)}%` : '–'}</td>
+                      <td className="opt">{hot ? <Tip text="Playing well above his usual level lately. Keep starting him."><span className="tag good">hot</span></Tip>
                         : cold ? <Tip text="Playing well below his usual level lately. Check his news before you drop him."><span className="tag bad">cold</span></Tip>
                           : <span className="dim">steady</span>}</td>
                       <td className="actions"><button className="btn ghost sm" onClick={() => ctx.moveTo(p.id, 'free')} aria-label={`Remove ${p.name} from my team`}>×</button></td>

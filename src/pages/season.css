@@ -11,8 +11,10 @@
    Roster table on the left under its own control bar, readouts stacked on the right. Both
    scroll inside the pane, so the control bar and the column headers never leave the screen
    and the whole roster is one eyeful on a laptop. */
-.teampage .desk { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; }
-.teampage .deskmain { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; border-right: 1px solid var(--line); }
+/* The readouts take a share of the desk rather than a fixed slab, so a 13-inch laptop and a
+   wide monitor both give the table the space it has left over. */
+.teampage .desk { display: grid; grid-template-columns: minmax(0, 1fr) clamp(252px, 23vw, 360px); min-height: 0; }
+.teampage .deskmain { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; border-right: 1px solid var(--line); }
 .teampage .deskbar { display: flex; align-items: center; gap: var(--s4); padding: 5px var(--s5); border-bottom: 1px solid var(--line); }
 .teampage .deskbar .seg { border-bottom: 0; }
 .teampage .deskbar .search { margin: 0 0 0 auto; max-width: 240px; }
@@ -72,18 +74,31 @@ a.btn:hover { text-decoration: none; }
 .wire tr.upgrade td.stick { background: #101a14; box-shadow: inset 2px 0 0 var(--good); }
 .wire td.stick .tag { vertical-align: 1px; }
 
-@media (max-width: 1180px) {
-  .teampage .desk { grid-template-columns: minmax(0, 1fr) 272px; }
+/* Columns that answer a second question go first. Under 820px the roster keeps rank, slot,
+   name, games, value and points a game: everything you need to set a lineup, nothing else. */
+@media (max-width: 820px) {
+  .t th.opt, .t td.opt { display: none; }
 }
+@media (max-width: 560px) {
+  .t th.rk, .t td.rk { display: none; }
+}
+
 @media (max-width: 860px), (max-height: 560px) {
   .teampage .desk { grid-template-columns: 1fr; min-height: 0; }
   .teampage .deskmain { border-right: 0; grid-template-rows: auto auto; }
-  .teampage .deskscroll, .teampage .deskside { overflow: visible; }
+  /* The table still scrolls sideways here; only the vertical scroll box goes away. Letting
+     it overflow visibly would stretch the page and drag the alert strip's text off-screen. */
+  .teampage .deskscroll { overflow-x: auto; }
+  .teampage .deskside { overflow: visible; }
   .teampage .deskscroll { padding: 0 var(--s3) var(--s4); }
   .teampage .deskbar { flex-wrap: wrap; gap: var(--s2); padding: var(--s2) var(--s3); }
   .teampage .deskbar .search { margin-left: 0; max-width: none; flex: 1 1 100%; }
   .teampage .deskside { border-top: 1px solid var(--line2); }
-  .t .stick { min-width: 140px; max-width: 52vw; box-shadow: inset -1px 0 0 var(--line); }
+  /* The frozen name column has to clip, or a long name and a position list slide out under
+     the games column while the table scrolls. */
+  .t .stick { min-width: 136px; max-width: 54vw; overflow: hidden; text-overflow: ellipsis; box-shadow: inset -1px 0 0 var(--line); }
+  .t td.stick .pname { max-width: 100%; overflow: hidden; }
+  .t td.stick .pname small { overflow: hidden; text-overflow: ellipsis; }
   .wire tr.upgrade td.stick { box-shadow: inset 2px 0 0 var(--good), inset -1px 0 0 var(--line); }
   .dropnote { grid-template-columns: 1fr; }
   /* Thumbs, not a mouse: every control in a row gets a real tap target. */

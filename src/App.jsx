@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useFetch, useLocal } from './lib/store.js'
 import { useEspnLeague } from './lib/espn.js'
 import { clearToken, tokenInUrl, unpack } from './lib/link.js'
-import { computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, etToday, gamesBetween, normName, tagNews, weekBounds } from './lib/model.js'
+import { bestLineup, computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, etToday, gamesBetween, normName, tagNews, weekBounds } from './lib/model.js'
 import { availability } from './lib/predict.js'
 import { score, spreadScale } from './lib/grade.js'
 import { Toaster, toast } from 'sonner'
@@ -15,15 +15,15 @@ import News from './pages/News.jsx'
 import League from './pages/League.jsx'
 import Scorecard from './pages/Scorecard.jsx'
 
-// key, full name, page, rail label. The rail label is what fits in 56px; the full name is
-// what the finder and the page heading say.
+// key, full name, page, rail label. The rail label is the page's own name shortened, never
+// a new word for it: the rail is wide enough for 'Scorecard', so it says Scorecard.
 const TABS = [
   ['team', 'My team', Team, 'Team'],
   ['week', 'This week', Matchup, 'Week'],
-  ['waivers', 'Waivers', Waivers, 'Wire'],
+  ['waivers', 'Waivers', Waivers, 'Waivers'],
   ['trade', 'Trade', Trade, 'Trade'],
   ['news', 'News', News, 'News'],
-  ['scorecard', 'Scorecard', Scorecard, 'Score'],
+  ['scorecard', 'Scorecard', Scorecard, 'Scorecard'],
   ['league', 'League setup', League, 'Setup'],
 ]
 const DATE_FMT = { weekday: 'short', day: 'numeric', month: 'short' }
@@ -204,6 +204,13 @@ export default function App() {
   const gtdN = ctx.myPlayers.filter((p) => status(p) === 'dtd').length
   const openSlots = s.rosterSize - mine.length
   const ready = !!pdata.data && players.length > 0
+  // How many starting slots are filled by someone who will actually play. This is the one
+  // reading that tells you whether tonight is already losing, and it is cheap enough to
+  // recompute on every render for thirteen players.
+  const startSlots = s.slots.split(',').map((x) => x.trim()).filter(Boolean)
+  const starters = bestLineup(ctx.myPlayers, startSlots).starters
+  const okStarters = starters.filter((r) => r.player && status(r.player) === 'ok').length
+  const lineupBad = okStarters < startSlots.length
 
   return (
     <div className="app">
@@ -223,10 +230,14 @@ export default function App() {
 
       <div className="body">
         <header className="readout">
-          <div className="cell"><span className="lbl">Date</span><b>{new Date().toLocaleDateString(undefined, DATE_FMT)}</b></div>
+          <div className="cell lo"><span className="lbl">Date</span><b>{new Date().toLocaleDateString(undefined, DATE_FMT)}</b></div>
           <div className="cell"><span className="lbl">Roster</span>
             <b style={openSlots > 0 ? { color: 'var(--warn)' } : undefined}>{mine.length}/{s.rosterSize}</b>
             {openSlots > 0 && <span className="sub">{openSlots} open</span>}
+          </div>
+          <div className="cell"><span className="lbl">Lineup</span>
+            <b style={lineupBad ? { color: 'var(--bad)' } : undefined}>{okStarters}/{startSlots.length}</b>
+            <span className="sub">{lineupBad ? 'will play' : 'all set'}</span>
           </div>
           <div className="cell"><span className="lbl">Wk games</span><b>{ready ? wkGames : '–'}</b></div>
           <div className="cell"><span className="lbl">Out</span>
