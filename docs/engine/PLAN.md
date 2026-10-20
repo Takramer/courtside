@@ -1,6 +1,7 @@
 # Courtside engine — plan
 
-Written 2026-10-19. All eight phases are built. What is left is a season of weeks to grade.
+Written 2026-10-19. All nine phases are built. Phase 9, added 2026-10-20, grades the engine on
+last season so the scorecard has something to say before this one has any weeks.
 
 Two jobs, in this order:
 
@@ -177,6 +178,7 @@ Each one ships on its own and is useful alone.
 | 6 | **Done.** Matchup history and the friction table, in the player panel | The detail nobody else has |
 | 7 | **Done.** One availability resolver, a roster news sweep, off-court flags | Catches the week-wreckers |
 | 8 | **Done.** Scorecard: what the model said vs what happened | Proves, or disproves, the whole thing |
+| 9 | **Done.** `npm run backtest`: last season replayed through `predict.js`, fed back into the odds | Phase 8 needs twenty weeks; this needs a second |
 
 Phases 1 and 2 are a weekend each. Phases 3 and 4 are the real work — a week of evenings, and
 they are where the model either earns its keep or does not. Phase 8 is small and the most
@@ -267,9 +269,47 @@ Settled 2026-10-19, phase 8:
 19. **Ties are excluded, not rounded.** Neither a win nor a loss; counting them either way
    would flatter or punish the model for nothing.
 
+Settled 2026-10-20, phase 9:
+
+20. **Grade on last season, not just this one.** `worker/backtest.mjs` walks 2025-26 a week
+   at a time, knowing only the games before each Monday, drafts forty imaginary ten-team
+   leagues, prices every matchup with the real `predict.js` and scores it with the real
+   `grade.js`. 4,394 matchups. It cannot see ESPN's projection or the injury report, so it
+   grades the spread, availability, the nightly cap and the bell curve, not the blend.
+21. **The independence assumption was the biggest error, and it is fixed at the source.**
+   Before the fix weeks missed by half again what the model claimed (half inside one sd
+   against a claimed 68%) and 93% weeks were won 82% of the time. A man's nights are not
+   independent draws — same role, same minutes, same sore ankle — so `teamWeek` now adds a
+   per-player level term, `LEVEL_CV = 0.3`. It was picked on the first half of the season's
+   Brier and checked on the second: 0.203 → 0.192. Full season: 0.193 → 0.185, and 65% of
+   team-weeks inside one sd.
+22. **A global spread correction exists but barely moves.** `spreadScale` blends the replay's
+   margin miss with the ledger's, the ledger taking over as weeks are graded, clipped to
+   0.8–1.6. With the level term in, the replay asks for ×1.03, and a scale fitted on the
+   first half slightly *hurt* the second (0.191 → 0.193). It stays because this season may
+   not behave like the last, and the ledger is how it would find out.
+23. **The defence table does nothing measurable.** Brier 0.1846 with it, 0.1845 without,
+   typical miss the same. It costs nothing to keep and the panel already shows its effect,
+   but it is not where the edge is.
+24. **The lineup cap is nightly.** It was pooled over the week, so a Wednesday with twelve of
+   your men playing paid for twelve. Each night now fills ten slots best-first, and each man
+   uses up as much of a slot as he is likely to fill, so the eleventh man is priced as
+   cover for the ten in front of him.
+25. **Points already scored count.** A Thursday forecast compared only the games left, so a
+   300-point lead read as a coin flip. ESPN's running score goes in as banked points with no
+   spread, and games that have tipped off are no longer priced again.
+26. **Form alone projects about 39 points high per team-week.** Drafting by recent form
+   picks men on hot streaks, and the streaks cool. Live, ESPN's projection pulls form back;
+   the replay has no such pull, so this number overstates the live bias. The ledger's bias
+   line is the one to watch.
+27. **Late season is noisier than early.** The level term fits the first half almost exactly
+   and still runs about 20% tight on the second: rest days, tanking and shut-downs. Worth a
+   look in March, not before.
+
 ### What is not yet verified
 
 The grading maths has asserts and the page was checked in a browser against a seeded
-ledger. The ESPN side — `history: true` — has not run against a real league, because that
+ledger. Phase 9's banked points and nightly cap have asserts but have not run against a live
+matchup, for the same reason as below. The ESPN side — `history: true` — has not run against a real league, because that
 needs cookies that stay on Thomas's devices. The first visit to **Scorecard** with the
 league connected is the real test of it.

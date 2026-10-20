@@ -35,6 +35,10 @@ own, then `friction` to rebuild the table from what it collected:
 python ingest.py pbp && python ingest.py friction
 ```
 
+`npm run backtest`, from the repo root, replays last season through the site's own engine
+and writes `../public/data/backtest.json` for the Scorecard. It reads `courtside.db`, so run
+`logs` first. About a second. Run it again after any change to `src/lib/predict.js`.
+
 `python ingest.py --check` answers one question: can this machine reach `stats.nba.com`? NBA
 blocks most datacenter IPs; a residential connection is fine.
 

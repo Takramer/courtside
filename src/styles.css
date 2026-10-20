@@ -198,13 +198,6 @@ ul.plain li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .weights label { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; }
 .weights input { width: 70px; }
 
-.steps { padding-left: 20px; }
-.steps li { margin: 10px 0; }
-.learn section { margin-top: 32px; }
-.learn p { color: #c8cacd; }
-.gloss dt { font-weight: 700; margin-top: 14px; }
-.gloss dd { margin: 2px 0 0; color: var(--muted); }
-
 @media (max-width: 760px) {
   main { padding: var(--s5) var(--s4) 56px; }
   .cards3, .suggest, .two, .two.wide-left { grid-template-columns: 1fr; }

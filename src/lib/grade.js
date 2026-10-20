@@ -66,23 +66,43 @@ export function score(ledger, { minForProbability = 20 } = {}) {
   const full = done.filter(isFullWeek)
 
   // ---- points: gradeable from week one
-  const errors = done.map((e) => e.final.my - e.myMu) // signed: + means it scored more than we said
-  const inBand = done.filter((e) => e.mySd > 0 && Math.abs(e.final.my - e.myMu) <= e.mySd)
-  const points = done.length ? {
-    n: done.length,
+  // Both teams, because his total was projected by the same engine and the win probability
+  // rests on it as much as on mine. Twice the sample for nothing.
+  const sides = done.flatMap((e) => [
+    { mu: e.myMu, sd: e.mySd, got: e.final.my },
+    ...(e.oppMu != null ? [{ mu: e.oppMu, sd: e.oppSd, got: e.final.opp }] : []),
+  ])
+  const errors = sides.map((x) => x.got - x.mu) // signed: + means it scored more than we said
+  const spread = sides.filter((x) => x.sd > 0)
+  const inBand = spread.filter((x) => Math.abs(x.got - x.mu) <= x.sd)
+  const points = sides.length ? {
+    n: sides.length,
     // Positive bias means the projection runs low. A persistent one is the easiest thing
     // here to fix and the most embarrassing to leave in.
     bias: +mean(errors).toFixed(1),
     mae: +mean(errors.map(Math.abs)).toFixed(1),
     // The spread claims about 68% of weeks land within one standard deviation. Far under
     // and the model is overconfident; far over and it is hedging.
-    within1sd: +(inBand.length / done.length).toFixed(3),
+    within1sd: spread.length ? +(inBand.length / spread.length).toFixed(3) : null,
     expected1sd: 0.68,
+    // The same question as one number: the mean squared miss in units of the claimed spread.
+    // An honest spread scores 1. Above 1 and the misses are bigger than the model admits.
+    z2: spread.length ? +mean(spread.map((x) => ((x.got - x.mu) / x.sd) ** 2)).toFixed(3) : null,
   } : null
+
+  // ---- the margin: the one number the win probability actually depends on
+  // P(win) is the chance the margin lands above zero, so its spread is what has to be honest.
+  // Measured on the margin rather than on each side, because the two sides of one week are
+  // not independent of each other — same nights, same league-wide slumps.
+  const margins = done.filter((e) => e.oppMu != null && e.mySd > 0 && e.oppSd > 0).map((e) =>
+    ((e.final.my - e.final.opp) - (e.myMu - e.oppMu)) ** 2 / (e.mySd ** 2 + e.oppSd ** 2))
+  const margin = margins.length ? { n: margins.length, z2: +mean(margins).toFixed(3) } : null
 
   // ---- win probability: needs a season before it says anything
   const brier = done.length ? +mean(done.map((e) => (e.pWin - (e.final.won ? 1 : 0)) ** 2)).toFixed(4) : null
-  const edges = [0, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0001]
+  // Symmetric, so over-confidence shows at both ends: the replay put four in ten of its
+  // matchups below 40%, and one bucket for all of them hid that they were won too often.
+  const edges = [0, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0001]
   const buckets = []
   for (let i = 0; i < edges.length - 1; i++) {
     const inB = done.filter((e) => e.pWin >= edges[i] && e.pWin < edges[i + 1])
@@ -102,6 +122,7 @@ export function score(ledger, { minForProbability = 20 } = {}) {
     fullWeek: full.length,
     pending: all.filter((e) => !e.final).length,
     points,
+    margin,
     brier,
     baseline: 0.25, // saying 50% every week, without looking at anything
     beatsCoin: brier == null ? null : brier < 0.25,
@@ -111,4 +132,24 @@ export function score(ledger, { minForProbability = 20 } = {}) {
     minForProbability,
     record: { won: done.filter((e) => e.final.won).length, lost: done.filter((e) => !e.final.won).length },
   }
+}
+
+/**
+ * How much to widen the live spread, from everything graded so far.
+ *
+ * The replay of last season is the prior: thousands of weeks, but a season ago and on
+ * rosters that were never real. The ledger is the evidence: your league, this season, but a
+ * handful of weeks. Each margin's squared miss counts once, the replay counts as `weight` of
+ * them, and the answer moves from the replay to the ledger as the season fills in. With
+ * neither, 1 — the raw model, untouched.
+ *
+ * Clipped, because a scale is a correction, not a rescue. If the spread were off by more
+ * than this the model would be broken in a way widening cannot fix, and the scorecard is
+ * where that should show.
+ */
+export function spreadScale({ replay, ledger, weight = 40, lo = 0.8, hi = 1.6 } = {}) {
+  const prior = replay?.z2 ?? 1
+  const n = ledger?.n ?? 0
+  const z2 = (n * (ledger?.z2 ?? 0) + weight * prior) / (n + weight)
+  return +Math.min(hi, Math.max(lo, Math.sqrt(z2))).toFixed(3)
 }
