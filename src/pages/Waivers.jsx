@@ -25,6 +25,7 @@ export default function Waivers({ ctx }) {
   }[sort]
   const all = players.filter((p) => ctx.isFree(p) && ctx.status(p) !== 'out' && (pos === 'All' || p.pos.includes(pos)))
   const list = all.sort((x, y) => key(y) - key(x)).slice(0, 60)
+  const maxVal = Math.max(1, ...list.map((p) => values.get(p.id)?.val ?? 0))
   const worstMine = ctx.myPlayers[ctx.myPlayers.length - 1]
   const worstVal = worstMine ? values.get(worstMine.id)?.val ?? 0 : null
   const cats = catHeaders(settings)
@@ -85,7 +86,7 @@ export default function Waivers({ ctx }) {
                   <tr key={p.id} className={upgrade ? 'upgrade' : ''}>
                     <td className="stick"><PlayerName ctx={ctx} p={p} />{upgrade && <Tip text={`Clearly more valuable than ${worstMine.name}. Worth the swap.`}><span className="tag good">upgrade</span></Tip>}</td>
                     <td className="num">{games(p)}</td>
-                    <td className="num strong">{fmt(v?.val)}</td>
+                    <td className="heat"><i style={{ '--o': Math.max(0, (v?.val ?? 0) / maxVal * 0.42) }} /><span>{fmt(v?.val)}</span></td>
                     <td className="num">{v?.trend ? fmt(v.trend) : '–'}</td>
                     <td className="num">{fmt(p.own, 0)}% <small className={p.ownChg > 0 ? 'up' : p.ownChg < 0 ? 'down' : ''}>{p.ownChg > 0 ? '+' : ''}{fmt(p.ownChg)}</small></td>
                     {settings.format === 'cats' ? cats.map((c) => <ZCell key={c.k} z={v?.z[c.k]} />) : <td className="num">{fmt(v?.fp)}</td>}

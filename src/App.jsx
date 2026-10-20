@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useFetch, useLocal } from './lib/store.js'
 import { useEspnLeague } from './lib/espn.js'
 import { clearToken, tokenInUrl, unpack } from './lib/link.js'
-import { computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, normName, tagNews } from './lib/model.js'
+import { computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, etToday, gamesBetween, normName, tagNews, weekBounds } from './lib/model.js'
 import { availability } from './lib/predict.js'
 import { score, spreadScale } from './lib/grade.js'
 import { Toaster, toast } from 'sonner'
@@ -15,15 +15,18 @@ import News from './pages/News.jsx'
 import League from './pages/League.jsx'
 import Scorecard from './pages/Scorecard.jsx'
 
+// key, full name, page, rail label. The rail label is what fits in 56px; the full name is
+// what the finder and the page heading say.
 const TABS = [
-  ['team', 'My team', Team],
-  ['week', 'This week', Matchup],
-  ['waivers', 'Waivers', Waivers],
-  ['trade', 'Trade', Trade],
-  ['news', 'News', News],
-  ['scorecard', 'Scorecard', Scorecard],
-  ['league', 'League setup', League],
+  ['team', 'My team', Team, 'Team'],
+  ['week', 'This week', Matchup, 'Week'],
+  ['waivers', 'Waivers', Waivers, 'Wire'],
+  ['trade', 'Trade', Trade, 'Trade'],
+  ['news', 'News', News, 'News'],
+  ['scorecard', 'Scorecard', Scorecard, 'Score'],
+  ['league', 'League setup', League, 'Setup'],
 ]
+const DATE_FMT = { weekday: 'short', day: 'numeric', month: 'short' }
 
 const OWNER_MSG = { mine: 'added to your team', taken: 'marked taken by another team', free: 'marked available' }
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -33,7 +36,7 @@ function Loading() {
     <div className="skel" aria-busy="true">
       <i className="h" /><i className="l" />
       <div className="row3"><i className="c" /><i className="c" /><i className="c" /></div>
-      <i /><i /><i className="l" /><i /><i className="l" />
+      <i /><i /><i className="l" /><i /><i className="l" /><i /><i className="l" />
       <p>Loading 450+ players, schedules and news…</p>
     </div>
   )
@@ -79,6 +82,11 @@ export default function App() {
     const k = (e) => {
       const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable
       if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !typing)) { e.preventDefault(); setFinding((f) => !f) }
+      // 1-7 jump between pages. The rail prints the number beside each one, so the keys are
+      // discoverable rather than folklore.
+      if (!typing && !e.metaKey && !e.ctrlKey && !e.altKey && /^[1-7]$/.test(e.key)) {
+        const t = TABS[+e.key - 1]; if (t) { e.preventDefault(); location.hash = t[0] }
+      }
     }
     addEventListener('keydown', k); return () => removeEventListener('keydown', k)
   }, [])
@@ -187,29 +195,76 @@ export default function App() {
   }
   const Page = (TABS.find((t) => t[0] === tab) || TABS[0])[2]
 
+  // The readout bar carries the facts every page agrees on, in the same place on every page.
+  // The week's win probability is deliberately not one of them: only This week can compute
+  // it, and a stale copy sitting up here would be worse than no copy at all.
+  const [, weekEnd] = weekBounds(etToday())
+  const wkGames = ctx.myPlayers.reduce((n, p) => n + gamesBetween(teams[p.team], etToday(), weekEnd).length, 0)
+  const outN = ctx.myPlayers.filter((p) => status(p) === 'out').length
+  const gtdN = ctx.myPlayers.filter((p) => status(p) === 'dtd').length
+  const openSlots = s.rosterSize - mine.length
+  const ready = !!pdata.data && players.length > 0
+
   return (
     <div className="app">
-      <header className="top">
-        <a className="brand" href="#team"><span className="ball" />Courtside</a>
-        <nav>
-          {TABS.map(([k, label]) => <a key={k} href={`#${k}`} className={tab === k ? 'on' : ''}>{label}</a>)}
+      <div className="rail">
+        <a className="brand" href="#team" aria-label="Courtside — my team"><span className="ball" /></a>
+        <nav aria-label="Pages">
+          {TABS.map(([k, label, , short], i) => (
+            <a key={k} href={`#${k}`} className={tab === k ? 'on' : ''} title={`${label} (${i + 1})`}>
+              <span className="k">{i + 1}</span>{short}
+            </a>
+          ))}
         </nav>
-        <button className="findbtn" onClick={() => setFinding(true)} aria-label="Find a player">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-          <span>Find a player</span><kbd>{IS_MAC ? '⌘K' : 'Ctrl K'}</kbd>
+        <button className="railfind" onClick={() => setFinding(true)} aria-label="Find a player">
+          <span className="k">{IS_MAC ? '\u2318K' : '^K'}</span>Find
         </button>
-      </header>
+      </div>
+
+      <div className="body">
+        <header className="readout">
+          <div className="cell"><span className="lbl">Date</span><b>{new Date().toLocaleDateString(undefined, DATE_FMT)}</b></div>
+          <div className="cell"><span className="lbl">Roster</span>
+            <b style={openSlots > 0 ? { color: 'var(--warn)' } : undefined}>{mine.length}/{s.rosterSize}</b>
+            {openSlots > 0 && <span className="sub">{openSlots} open</span>}
+          </div>
+          <div className="cell"><span className="lbl">Wk games</span><b>{ready ? wkGames : '–'}</b></div>
+          <div className="cell"><span className="lbl">Out</span>
+            <b style={outN > 0 ? { color: 'var(--bad)' } : { color: 'var(--muted)' }}>{outN}</b>
+          </div>
+          <div className="cell"><span className="lbl">GTD</span>
+            <b style={gtdN > 0 ? { color: 'var(--warn)' } : { color: 'var(--muted)' }}>{gtdN}</b>
+          </div>
+          <div className="cell right">
+            <span className={`livedot ${linked ? '' : 'off'}`} />
+            {linked ? 'ESPN linked' : <a href="#league">not linked</a>}
+            <span className="mono">{pdata.data ? new Date(pdata.data.updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
+          </div>
+        </header>
+
+        <main className="pane">
+          {pdata.error && <div className="pad"><div className="banner bad">Could not load player data: {pdata.error}. Refresh in a minute.</div></div>}
+          {!pdata.data && !pdata.error ? <Loading /> : ready && <Page ctx={ctx} />}
+        </main>
+      </div>
+
+      <div className="statusbar">
+        <span>ESPN proj {fdata.data ? '+ stats.nba.com logs' : '\u00b7 no local logs yet'}</span>
+        {fdata.data?.updated && <span>form {new Date(fdata.data.updated).toLocaleDateString()}</span>}
+        <span>{ddata.data ? `dvp ${ddata.data.season}` : 'no dvp table'}</span>
+        {bdata.data?.brier != null && <span>brier {bdata.data.brier.toFixed(3)}</span>}
+        <span className="right">
+          <span><kbd>1</kbd>&ndash;<kbd>7</kbd> pages</span>
+          <span><kbd>{IS_MAC ? '\u2318K' : '^K'}</kbd> find</span>
+        </span>
+      </div>
+
       {incoming && <LinkIn token={incoming}
         onDone={(conn) => { setEspn(conn); setIncoming(null); clearToken(); toast('Connected. Your league is on this device now.') }}
         onCancel={() => { setIncoming(null); clearToken() }} />}
-      <main>
-        {pdata.error && <div className="banner bad">Could not load player data: {pdata.error}. Refresh in a minute.</div>}
-        {!pdata.data && !pdata.error ? <Loading /> : players.length > 0 && <Page ctx={ctx} />}
-      </main>
-      {players.length > 0 && <PlayerFinder ctx={ctx} open={finding} setOpen={setFinding} pages={TABS} />}
-      <Toaster theme="dark" position="bottom-center" offset={20} toastOptions={{ className: 'toast' }} />
+      {ready && <PlayerFinder ctx={ctx} open={finding} setOpen={setFinding} pages={TABS} />}
+      <Toaster theme="dark" position="bottom-center" offset={36} toastOptions={{ className: 'toast' }} />
       {openId && byId.get(openId) && <PlayerDrawer ctx={ctx} p={byId.get(openId)} onClose={() => setOpenId(null)} />}
-      <footer>Data: ESPN fantasy projections and stats, ESPN injury report, RotoWire and Google News. Updated {pdata.data ? new Date(pdata.data.updated).toLocaleTimeString() : '…'}.</footer>
     </div>
   )
 }

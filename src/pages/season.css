@@ -1,145 +1,93 @@
-/* Season pages: Today, My team, Waivers. Everything is scoped under .season so other pages keep their look. */
+/* My team, Waivers. Scoped under .season (and .deskpage for the instrument face) so the
+   other pages keep their own layout. */
 
-.season .sechead { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.season .sechead { display: flex; justify-content: space-between; align-items: baseline; gap: 4px var(--s4); flex-wrap: wrap; margin-bottom: var(--s2); }
 .season .sechead h2 { margin: 0; }
-.season .sechead > span, .season .sechead > a { font-size: 13px; }
-.season .hint { color: var(--muted); font-size: 13px; margin: 0 0 8px; text-wrap: pretty; }
-.season .lead { text-wrap: pretty; }
-.season h3 { margin-top: 18px; }
-.season h3:first-of-type { margin-top: 4px; }
-.season button.inline { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.season .sechead > span, .season .sechead > a { font-size: 12px; }
+.season .hint { color: var(--muted); font-size: 12px; margin: 0 0 var(--s2); text-wrap: pretty; }
+.season h3:first-of-type { margin-top: var(--s1); }
 
-/* Stat cards that say what to do, tinted only when there is something to act on */
-.season .stat b { font-variant-numeric: tabular-nums; }
-.season .stat span { text-wrap: pretty; }
-.season .stat.warn b { color: var(--warn); }
-.season .stat.warn b { color: var(--warn); }
-.season .stat.good b { color: var(--good); }
+/* ---------- My team: the desk ----------
+   Roster table on the left under its own control bar, readouts stacked on the right. Both
+   scroll inside the pane, so the control bar and the column headers never leave the screen
+   and the whole roster is one eyeful on a laptop. */
+.teampage .desk { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; }
+.teampage .deskmain { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; border-right: 1px solid var(--line); }
+.teampage .deskbar { display: flex; align-items: center; gap: var(--s4); padding: 5px var(--s5); border-bottom: 1px solid var(--line); }
+.teampage .deskbar .seg { border-bottom: 0; }
+.teampage .deskbar .search { margin: 0 0 0 auto; max-width: 240px; }
+.teampage .deskbar .search input { height: 24px; padding: 0 8px 0 28px; font-size: 12px;
+  background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%237c838f' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 9px center; }
+.teampage .deskscroll { overflow: auto; overscroll-behavior: contain; padding: 0 var(--s5) var(--s5); }
+.teampage .deskscroll .t th { top: 0; }
 
-/* Today: the lineup */
-.lineup { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line2); border-bottom: 1px solid var(--line); }
-.lineup li { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto 56px; grid-template-areas: 'slot who game val'; align-items: center; gap: 4px 14px; padding: 10px 14px; border-top: 1px solid var(--line); min-height: 52px; }
-.lineup li:first-child { border-top: 0; }
-.lineup .tip { grid-area: slot; border-bottom: 0; justify-self: start; }
-.lineup .who { grid-area: who; min-width: 0; }
-.lineup .game { grid-area: game; color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.lineup .game b { color: var(--text); font-weight: 600; }
-.lineup .val { grid-area: val; font-weight: 700; }
-.slotchip { display: inline-grid; place-items: center; min-width: 40px; height: 26px; padding: 0 6px; border-radius: var(--r-s); background: var(--panel2); font-family: var(--cond); font-size: 15px; font-weight: 600; letter-spacing: 0.03em; color: var(--text); }
-.lineup li.empty { grid-template-areas: 'slot fix fix fix'; background: rgba(229, 72, 77, 0.07); box-shadow: inset 3px 0 0 var(--bad); }
-.lineup li.empty .slotchip { background: rgba(229, 72, 77, 0.15); color: var(--bad); }
-.lineup .fix { grid-area: fix; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.lineup .fix b.bad { color: var(--bad); font-weight: 600; font-size: 14px; }
-.lineup .fixrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; }
-.lineup .fixrow .muted { font-size: 13px; }
-.lineup .fixrow .btn { margin-left: auto; }
+.teampage .roster .rk { color: var(--dim); font-size: 11px; }
+.teampage .roster .dim { color: var(--dim); font-size: 12px; }
+.teampage .roster tr.start td.slot { color: var(--accent); }
+.teampage .roster tr.bench td { color: var(--muted); }
+.teampage .roster tr.bench td.stick button.link { color: var(--muted); }
+.teampage .roster tr.broken td { background: rgba(199, 69, 63, 0.1); }
+.teampage .roster tr.broken td:first-child { box-shadow: inset 2px 0 0 var(--bad); }
+.teampage .roster td.actions .btn { min-width: 22px; padding: 0 6px; font-size: 13px; line-height: 1; }
 
-.season ul.plain.rows li { display: flex; align-items: center; gap: 8px 12px; }
-.season ul.plain.rows .grow { flex: 1; min-width: 0; }
-.season .callout ul.plain li { border-color: rgba(243, 109, 33, 0.18); }
-.season .callout ul.plain li:last-child { border-bottom: 0; }
+.teampage .deskside { overflow: auto; overscroll-behavior: contain; }
+.teampage .read { padding: var(--s3) var(--s4) var(--s4); border-bottom: 1px solid var(--line); }
+.teampage .read h3 { margin: 0 0 var(--s2); }
+.teampage .read small { display: block; text-wrap: pretty; line-height: 1.45; }
+.teampage .read .catbars { margin: 0 0 var(--s2); }
+.teampage .evlist li { padding: 5px 0; font-size: 12px; text-wrap: pretty; }
+.teampage .evlist li:last-child { border-bottom: 0; }
+.teampage .cutlist li { padding: 7px 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.teampage .cutlist li:last-child { border-bottom: 0; }
+.teampage .cutlist .row1 { display: flex; width: 100%; align-items: baseline; gap: var(--s2); }
+.teampage .cutlist .row1 .num { margin-left: auto; font-size: 13px; }
+.teampage .cutlist .why { margin: 0; font-size: 12px; text-wrap: pretty; }
 
-/* Onboarding: three tappable step cards */
-.stepcards { list-style: none; padding: 0; margin: var(--s6) 0 0; display: grid; }
-.stepcards a { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: var(--s4); padding: var(--s5) 0; border-top: 1px solid var(--line); color: var(--text);
-  transition: transform 160ms var(--ease-out), color 160ms; }
-.stepcards a:hover { text-decoration: none; }
-.stepcards a:active { transform: scale(0.985); }
-.stepcards .n { font-family: var(--cond); font-size: 40px; line-height: 1; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
-.stepcards .body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.stepcards .body b { font-family: var(--cond); font-size: 22px; font-weight: 600; }
-.stepcards .body > span { color: var(--muted); font-size: 14px; text-wrap: pretty; }
-.stepcards .go { color: var(--muted); font-size: 18px; transition: transform 160ms var(--ease-out), color 160ms; }
-.stepcards li:last-child a { border-bottom: 1px solid var(--line); }
-@media (hover: hover) and (pointer: fine) {
-  .stepcards a:hover .body b { color: var(--accent); }
-  .stepcards a:hover .go { color: var(--accent); transform: translateX(3px); }
-}
+/* ---------- Shared ---------- */
+.season .emptystate, .emptystate { margin-top: var(--s4); padding: var(--s6) var(--s5); background: var(--panel); text-align: center; }
+.emptystate b { font-family: var(--cond); font-size: 16px; font-weight: 600; }
+.emptystate p { color: var(--muted); margin: 4px auto var(--s3); max-width: 440px; text-wrap: pretty; }
+.emptystate .row { display: flex; gap: var(--s2); justify-content: center; flex-wrap: wrap; }
+a.btn { display: inline-flex; }
+a.btn:hover { text-decoration: none; }
 
-/* Shared empty state */
-.season .emptystate { margin-top: var(--s5); padding: var(--s6) var(--s5); background: var(--panel); border-radius: var(--r); text-align: center; }
-.season .emptystate b { font-family: var(--cond); font-size: 22px; font-weight: 600; }
-.season .emptystate p { color: var(--muted); margin: 6px auto 16px; max-width: 460px; text-wrap: pretty; }
-.season .emptystate .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-.season a.btn { display: inline-block; }
-.season a.btn:hover { text-decoration: none; }
+/* The player column stays put while the numbers scroll sideways */
+.t .stick { position: sticky; left: 0; z-index: 1; background: var(--bg); min-width: 170px; }
+.t th.stick { z-index: 3; }
+.t tr:hover td.stick { background: #14171c; }
+.teampage .deskscroll .t .stick { background: var(--bg); }
+.teampage .roster tr.broken td.stick { background: #2a1416; }
 
-/* Tables: the player column sticks while the numbers scroll sideways on phones */
-.season .t tbody tr:last-child td { border-bottom: 0; }
-.season .t .stick { position: sticky; left: 0; z-index: 1; background: var(--bg); min-width: 190px; }
-.season .t th.stick { z-index: 2; }
-.season .t tr:hover td.stick { background: color-mix(in srgb, #fff 2%, var(--bg)); }
-.season .t td.actions { padding-right: 12px; }
+.search li.none { padding: 5px 8px; color: var(--muted); font-size: 12px; }
 
-/* My team */
-.rostercount { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
-.rostercount b { color: var(--text); }
-.rostercount.warn { color: var(--warn); }
-.teampage .rk { display: flex; align-items: baseline; }
-.teampage .rank { flex: none; width: 22px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.teampage .roster .tag { margin-left: 0; }
-.teampage .roster td .muted { font-size: 13px; }
-.teampage .banner { margin-top: 16px; }
-
-/* Search box: magnifier inside the field, roomier list */
-.teampage .search { max-width: 460px; margin: 20px 0 0; }
-.teampage .search input { padding: 10px 12px 10px 36px; font-size: 15px;
-  background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b95a9' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center; }
-.teampage .search ul { box-shadow: var(--shadow-pop); transform-origin: top center; animation: season-drop 140ms var(--ease-out); }
-.search button.on { background: var(--panel3); }
-.search li.none { padding: 8px 10px; color: var(--muted); font-size: 14px; }
-
-.dropcards { list-style: none; padding: 0; margin: 12px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
-.dropcards li { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: var(--s4); background: var(--panel); border-top: 2px solid var(--line2); border-radius: 0 0 var(--r) var(--r); }
-.dropcards .why { margin: 0; flex: 1; text-wrap: pretty; }
-.dropcards .btn { margin-top: 4px; }
-
-/* Waivers */
-.dropnote { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px var(--s3); margin-top: var(--s5); padding: var(--s4) 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.dropnote .lbl { font-family: var(--cond); font-size: 15px; font-weight: 600; color: var(--muted); }
-.dropnote p { grid-column: 1 / -1; margin: 2px 0 0; color: var(--muted); font-size: 14px; text-wrap: pretty; }
+/* ---------- Waivers ---------- */
+.dropnote { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px var(--s3); margin-top: var(--s4); padding: var(--s2) 0; border-top: 1px solid var(--line2); border-bottom: 1px solid var(--line); }
+.dropnote .lbl { font-size: 10px; }
+.dropnote p { grid-column: 1 / -1; margin: 2px 0 0; color: var(--muted); font-size: 12px; text-wrap: pretty; }
 .dropnote .tag { margin-left: 0; }
-.waiverpage .filters { margin: 20px 0 8px; gap: 10px 20px; align-items: flex-end; }
-.fgroup { display: flex; flex-direction: column; gap: 6px; }
-.flabel { font-size: 14px; font-weight: 500; color: var(--muted); }
-.wire tr.upgrade td { background: rgba(60, 191, 110, 0.06); }
-.wire tr.upgrade td.stick { background: color-mix(in srgb, var(--good) 6%, var(--bg)); box-shadow: inset 3px 0 0 var(--good); }
-.wire tr.upgrade:hover td.stick { background: color-mix(in srgb, var(--good) 9%, var(--bg)); }
+.waiverpage .filters { margin: var(--s4) 0 var(--s2); gap: var(--s2) var(--s5); align-items: flex-end; }
+.fgroup { display: flex; flex-direction: column; gap: 4px; }
+.flabel { font-family: var(--cond); font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.wire tr.upgrade td { background: rgba(79, 180, 119, 0.07); }
+.wire tr.upgrade td.stick { background: #101a14; box-shadow: inset 2px 0 0 var(--good); }
 .wire td.stick .tag { vertical-align: 1px; }
 
-@keyframes season-drop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
-
-@media (max-width: 760px) {
-  /* A hairline marks where the numbers slide under the frozen player column */
-  .season .t .stick { min-width: 150px; max-width: 52vw; box-shadow: inset -1px 0 0 var(--line); }
-  .wire tr.upgrade td.stick { box-shadow: inset 3px 0 0 var(--good), inset -1px 0 0 var(--line); }
-  .season .dropnote { grid-template-columns: 1fr; }
-  .waiverpage .seg button { padding: 8px 10px; }
-  .season .btn.sm { min-height: 36px; }
+@media (max-width: 1180px) {
+  .teampage .desk { grid-template-columns: minmax(0, 1fr) 272px; }
 }
-@media (max-width: 560px) {
-  .lineup li { grid-template-columns: 46px minmax(0, 1fr) auto; grid-template-areas: 'slot who val' 'slot game val'; padding: 10px 12px; gap: 2px 10px; }
-  .lineup li.empty { grid-template-areas: 'slot fix fix'; }
-  .lineup .game { white-space: normal; }
-  .slotchip { min-width: 36px; }
-  .lineup .fixrow .btn { margin-left: 0; }
-  .stepcards a { grid-template-columns: 32px 1fr; padding: 14px; }
-  .stepcards .go { display: none; }
+@media (max-width: 860px), (max-height: 560px) {
+  .teampage .desk { grid-template-columns: 1fr; min-height: 0; }
+  .teampage .deskmain { border-right: 0; grid-template-rows: auto auto; }
+  .teampage .deskscroll, .teampage .deskside { overflow: visible; }
+  .teampage .deskscroll { padding: 0 var(--s3) var(--s4); }
+  .teampage .deskbar { flex-wrap: wrap; gap: var(--s2); padding: var(--s2) var(--s3); }
+  .teampage .deskbar .search { margin-left: 0; max-width: none; flex: 1 1 100%; }
+  .teampage .deskside { border-top: 1px solid var(--line2); }
+  .t .stick { min-width: 140px; max-width: 52vw; box-shadow: inset -1px 0 0 var(--line); }
+  .wire tr.upgrade td.stick { box-shadow: inset 2px 0 0 var(--good), inset -1px 0 0 var(--line); }
+  .dropnote { grid-template-columns: 1fr; }
+  /* Thumbs, not a mouse: every control in a row gets a real tap target. */
+  .btn.sm { min-height: 32px; }
+  .teampage .roster td.actions .btn { min-width: 32px; }
+  .teampage .deskbar .search input { height: 32px; }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .teampage .search ul { animation: none; }
-  .stepcards a, .stepcards .go { transition: border-color 160ms, background-color 160ms, color 160ms; }
-  .stepcards a:active, .stepcards a:hover .go { transform: none; }
-}
-
-/* ---------- Starting lineup on My team ---------- */
-.teampage .lineupnow { margin: var(--s4) 0 var(--s5); }
-.teampage .lineupnow h3 { margin-top: 0; }
-.teampage .slotstrip { list-style: none; margin: 0 0 var(--s2); padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
-.teampage .slotstrip li { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 220px; padding: 5px 10px 5px 6px; border: 1px dashed var(--line2); border-radius: var(--r-s); font-size: 13px; color: var(--muted); }
-.teampage .slotstrip li.filled { border-style: solid; background: var(--panel); color: var(--text); }
-.teampage .slotstrip .slot { flex: none; min-width: 28px; padding: 0 5px; border-radius: 3px; background: var(--panel2); font-family: var(--cond); font-size: 13px; font-weight: 600; text-align: center; color: var(--muted); }
-.teampage .slotstrip li.filled .slot { background: rgba(243, 109, 33, 0.16); color: var(--accent); }
-.teampage .slotstrip button.link { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.teampage .benchline { display: block; margin-top: 4px; }
