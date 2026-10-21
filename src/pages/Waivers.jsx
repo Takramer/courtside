@@ -26,7 +26,8 @@ export default function Waivers({ ctx }) {
   const all = players.filter((p) => ctx.isFree(p) && ctx.status(p) !== 'out' && (pos === 'All' || p.pos.includes(pos)))
   const list = all.sort((x, y) => key(y) - key(x)).slice(0, 60)
   const maxVal = Math.max(1, ...list.map((p) => values.get(p.id)?.val ?? 0))
-  const worstMine = ctx.myPlayers[ctx.myPlayers.length - 1]
+  // Who you would drop to make room — a man on IR is not holding a spot, so he is never the answer.
+  const worstMine = ctx.activePlayers[ctx.activePlayers.length - 1]
   const worstVal = worstMine ? values.get(worstMine.id)?.val ?? 0 : null
   const cats = catHeaders(settings)
   const short = worstMine?.name.split(' ').slice(-1)[0]

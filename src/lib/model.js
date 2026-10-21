@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS = {
   teams: 10,
   rosterSize: 13,
   slots: 'PG,SG,SF,PF,C,G,F,PF/C,UT,UT',
+  ir: 1, // injured-reserve spots: a ruled-out player sits here without costing a roster spot
   draftSlot: 1,
   punt: [], // category keys to ignore
   weights: { ...DEFAULT_WEIGHTS, ftm: 2 }, // league scores +1 per made FT, -1 per miss; same as FTM 2, FTA -1
@@ -159,6 +160,17 @@ export function bestLineup(candidates, slots) {
   const benched = []
   candidates.forEach((_, i) => { if (!tryPlace(i, new Set())) benched.push(candidates[i]) })
   return { starters: slots.map((slot, s) => ({ slot, player: owner[s] === null ? null : candidates[owner[s]] })), benched }
+}
+
+// ESPN's injured-reserve spots hold players who are ruled out, and they cost no roster spot: a man
+// on IR fills no lineup slot and leaves his bench spot open. Only `count` fit, so when more are ruled
+// out than there are spots the least valuable go in — `players` arrives value-first, and the one you
+// may want back soonest is the one worth keeping on the bench.
+export function splitIR(players, isOut, count) {
+  if (!count) return { active: players, ir: [] }
+  const ir = players.filter(isOut).slice(-count)
+  const irSet = new Set(ir.map((p) => p.id))
+  return { active: players.filter((p) => !irSet.has(p.id)), ir }
 }
 
 // ---------- draft ----------

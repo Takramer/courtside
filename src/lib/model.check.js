@@ -1,7 +1,7 @@
 // Self-check for the fantasy math. Run: npm run check
 import assert from 'node:assert/strict'
 import { bestLineup, snakePicks, computeValues, evaluateTrade, weekBounds, tagNews, normName, blendLine, DEFAULT_SETTINGS,
-  likelyGone, positionOutlook, draftSuggestions, positionRun } from './model.js'
+  likelyGone, positionOutlook, draftSuggestions, positionRun, splitIR } from './model.js'
 
 // Lineup: a PG/SG star must not block the only pure PG from playing.
 const mk = (id, pos) => ({ id, pos })
@@ -15,6 +15,22 @@ assert.equal(bestLineup([mk(1, ['C']), mk(2, ['C'])], ['C', 'PG']).benched[0].id
 // PF/C takes either a power forward or a centre, and nobody else
 assert.equal(bestLineup([mk(1, ['C']), mk(2, ['PF']), mk(3, ['PG'])], ['PF/C']).benched.map((x) => x.id).join(), '2,3')
 assert.equal(bestLineup([mk(1, ['SG'])], ['PF/C']).benched.length, 1)
+
+// IR: only a ruled-out player goes there, it holds no more than the spots the league gives you,
+// and with two ruled out the lower-valued one (later in the value-first list) takes the single spot.
+const irOut = new Set([2, 4])
+const five = [mk(1, ['PG']), mk(2, ['C']), mk(3, ['SF']), mk(4, ['PF']), mk(5, ['SG'])]
+const isOut = (p) => irOut.has(p.id)
+assert.deepEqual(splitIR(five, isOut, 1).ir.map((p) => p.id), [4])
+assert.deepEqual(splitIR(five, isOut, 1).active.map((p) => p.id), [1, 2, 3, 5])
+assert.deepEqual(splitIR(five, isOut, 2).ir.map((p) => p.id), [2, 4])
+// No IR spots, or nobody ruled out: the whole roster stays active.
+assert.deepEqual(splitIR(five, isOut, 0).active.map((p) => p.id), [1, 2, 3, 4, 5])
+assert.equal(splitIR(five, () => false, 1).ir.length, 0)
+// More spots than ruled-out players never pulls in a healthy one.
+assert.deepEqual(splitIR(five, isOut, 3).ir.map((p) => p.id), [2, 4])
+// A healthy roster the size of the limit has no open spot; one on IR opens one.
+assert.equal(DEFAULT_SETTINGS.rosterSize - splitIR(five, isOut, 1).active.length, DEFAULT_SETTINGS.rosterSize - 4)
 
 // Snake draft: slot 3 of 10 picks 3, 18, 23, 38.
 assert.deepEqual(snakePicks(10, 3, 4), [3, 18, 23, 38])

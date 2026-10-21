@@ -122,7 +122,7 @@ function Events({ ctx, myPlayers }) {
 }
 
 export default function Team({ ctx }) {
-  const { myPlayers, values, settings, teams } = ctx
+  const { myPlayers, activePlayers, irPlayers, values, settings, teams } = ctx
   const [, weekEnd] = weekBounds(etToday())
   // Best to worst is how he has always read this roster, so that is the default. The slot
   // column means lineup order is one click away without being the thing you land on.
@@ -136,19 +136,24 @@ export default function Team({ ctx }) {
   const longOut = myPlayers.filter((p) => (ctx.newsBy.get(p.id) || []).some((n) => n.tags.some((t) => t.k === 'longterm')) && ctx.status(p) === 'out')
   const dropCands = [...new Set([...longOut, ...myPlayers.slice(-2)])]
   const swing = settings.format === 'points' ? 4 : 1.5
-  const open = settings.rosterSize - myPlayers.length
+  const open = settings.rosterSize - activePlayers.length
   const slots = settings.slots.split(',').map((x) => x.trim()).filter(Boolean)
-  const lineup = bestLineup(myPlayers, slots)
+  const lineup = bestLineup(activePlayers, slots)
 
   // One table instead of a lineup strip above a roster table. The slot column is the answer
   // to "who do I start", and the value column is the answer to "who is worth keeping", so
   // they belong on the same row. Rank is always by value, whatever the row order.
   const rankOf = new Map(myPlayers.map((p, i) => [p.id, i + 1]))
   const slotOf = new Map(lineup.starters.filter((r) => r.player).map((r) => [r.player.id, r.slot]))
+  const irSet = new Set(irPlayers.map((p) => p.id))
+  const slotFor = (p) => (irSet.has(p.id) ? 'IR' : slotOf.get(p.id) || 'BN')
+  // IR rows go last in lineup order, the way ESPN prints them: they are the one part of the
+  // roster no lineup decision touches.
   const rows = order === 'lineup'
     ? [...lineup.starters.filter((r) => r.player).map((r) => ({ slot: r.slot, p: r.player, start: true })),
-       ...lineup.benched.map((p) => ({ slot: 'BN', p, start: false }))]
-    : myPlayers.map((p) => ({ slot: slotOf.get(p.id) || 'BN', p, start: slotOf.has(p.id) }))
+       ...lineup.benched.map((p) => ({ slot: 'BN', p, start: false })),
+       ...irPlayers.map((p) => ({ slot: 'IR', p, start: false }))]
+    : myPlayers.map((p) => ({ slot: slotFor(p), p, start: slotOf.has(p.id) }))
   const maxVal = Math.max(1, ...myPlayers.map((p) => values.get(p.id)?.val ?? 0))
 
   if (myPlayers.length === 0) {
@@ -182,7 +187,7 @@ export default function Team({ ctx }) {
             <table className="t roster">
               <thead><tr>
                 <th className="num rk" style={{ width: 26 }}>#</th>
-                <th><Tip text="Where he goes in your ESPN lineup. G = any guard, F = any forward, PF/C = power forward or centre, UT = anyone, BN = bench and scores nothing.">Slot</Tip></th>
+                <th><Tip text="Where he goes in your ESPN lineup. G = any guard, F = any forward, PF/C = power forward or centre, UT = anyone, BN = bench and scores nothing, IR = injured reserve, which costs you no roster spot.">Slot</Tip></th>
                 <th className="stick">Player</th>
                 <th className="num"><Tip text="Games left this week (Mon–Sun). More games means more stats.">G</Tip></th>
                 <th className="num"><ValueTip settings={settings} /></th>
@@ -199,7 +204,7 @@ export default function Team({ ctx }) {
                   const hot = v && v.trend > swing; const cold = v && v.trend < -swing
                   const hurt = ctx.status(p)
                   return (
-                    <tr key={p.id} className={`${start ? 'start' : 'bench'}${hurt === 'out' && start ? ' broken' : ''}`}>
+                    <tr key={p.id} className={`${start ? 'start' : 'bench'}${slot === 'IR' ? ' onir' : ''}${hurt === 'out' && start ? ' broken' : ''}`}>
                       <td className="num rk">{rankOf.get(p.id)}</td>
                       <td className="slot">{slot}</td>
                       <td className="stick"><PlayerName ctx={ctx} p={p} /></td>
