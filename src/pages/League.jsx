@@ -88,6 +88,10 @@ export default function League({ ctx }) {
           <span className="lname">Roster size <small>starters + bench, not injured-reserve spots</small></span>{num('rosterSize', 5, 20)}
           <Affects>how many open spots you have, and who looks replaceable.</Affects>
         </label>
+        <label className="field row">
+          <span className="lname">IR spots <small>a player ruled out sits here and costs you no roster spot</small></span>{num('ir', 0, 3)}
+          <Affects>whether a ruled-out player counts against your roster, so how many spots read as open.</Affects>
+        </label>
       </section>
 
       <section className="lsec" aria-labelledby="ls-lineup">

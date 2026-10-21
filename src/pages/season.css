@@ -28,6 +28,9 @@
 .teampage .roster tr.start td.slot { color: var(--accent); }
 .teampage .roster tr.bench td { color: var(--muted); }
 .teampage .roster tr.bench td.stick button.link { color: var(--muted); }
+.teampage .roster tr.onir td { color: var(--dim); }
+.teampage .roster tr.onir td.slot { color: var(--bad); }
+.teampage .roster tr.onir td:first-child { box-shadow: inset 2px 0 0 var(--line); }
 .teampage .roster tr.broken td { background: rgba(199, 69, 63, 0.1); }
 .teampage .roster tr.broken td:first-child { box-shadow: inset 2px 0 0 var(--bad); }
 .teampage .roster td.actions .btn { min-width: 22px; padding: 0 6px; font-size: 13px; line-height: 1; }

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useFetch, useLocal } from './lib/store.js'
 import { useEspnLeague } from './lib/espn.js'
 import { clearToken, tokenInUrl, unpack } from './lib/link.js'
-import { bestLineup, computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, etToday, gamesBetween, normName, tagNews, weekBounds } from './lib/model.js'
+import { bestLineup, computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, etToday, gamesBetween, normName, splitIR, tagNews, weekBounds } from './lib/model.js'
 import { availability } from './lib/predict.js'
 import { score, spreadScale } from './lib/grade.js'
 import { Toaster, toast } from 'sonner'
@@ -187,11 +187,16 @@ export default function App() {
   const exactTaken = !!freeIds || taken.length >= (s.teams - 1) * s.rosterSize * 0.8
   const isFree = (p) => (freeIds ? freeIds.has(p.id) : !mineSet.has(p.id) && !takenSet.has(p.id) && (exactTaken || p.own < s.ownCutoff))
 
+  const myPlayers = mine.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => (values.get(b.id)?.val ?? -99) - (values.get(a.id)?.val ?? -99))
+  // Split once, here, so every page counts the roster the way ESPN does: a man on IR is still mine,
+  // but he is not on the active roster and no page should start him or charge a bench spot for him.
+  const { active: activePlayers, ir: irPlayers } = splitIR(myPlayers, (p) => status(p) === 'out', s.ir ?? 0)
+
   const ctx = {
     isFree, exactTaken, espn, setEspn, league, linked,
     players, byId, teams, values, formBy, formUpdated: fdata.data?.updated, formCurrent: !!fdata.data?.is_current_season, dvp: ddata.data, dvpUpdated: ddata.data?.updated, matchups: mdata.data, friction: xdata.data, backtest: bdata.data, sdScale, settings: s, setSettings, mine, setMine, taken, setTaken, mineSet, takenSet,
     newsBy, injuryBy, offCourtBy, status, avail, ledger, setLedger, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
-    myPlayers: mine.map((id) => byId.get(id)).filter(Boolean).sort((a, b) => (values.get(b.id)?.val ?? -99) - (values.get(a.id)?.val ?? -99)),
+    myPlayers, activePlayers, irPlayers,
   }
   const Page = (TABS.find((t) => t[0] === tab) || TABS[0])[2]
 
@@ -199,16 +204,16 @@ export default function App() {
   // The week's win probability is deliberately not one of them: only This week can compute
   // it, and a stale copy sitting up here would be worse than no copy at all.
   const [, weekEnd] = weekBounds(etToday())
-  const wkGames = ctx.myPlayers.reduce((n, p) => n + gamesBetween(teams[p.team], etToday(), weekEnd).length, 0)
+  const wkGames = activePlayers.reduce((n, p) => n + gamesBetween(teams[p.team], etToday(), weekEnd).length, 0)
   const outN = ctx.myPlayers.filter((p) => status(p) === 'out').length
   const gtdN = ctx.myPlayers.filter((p) => status(p) === 'dtd').length
-  const openSlots = s.rosterSize - mine.length
+  const openSlots = s.rosterSize - activePlayers.length
   const ready = !!pdata.data && players.length > 0
   // How many starting slots are filled by someone who will actually play. This is the one
   // reading that tells you whether tonight is already losing, and it is cheap enough to
   // recompute on every render for thirteen players.
   const startSlots = s.slots.split(',').map((x) => x.trim()).filter(Boolean)
-  const starters = bestLineup(ctx.myPlayers, startSlots).starters
+  const starters = bestLineup(activePlayers, startSlots).starters
   const okStarters = starters.filter((r) => r.player && status(r.player) === 'ok').length
   const lineupBad = okStarters < startSlots.length
 
@@ -232,7 +237,7 @@ export default function App() {
         <header className="readout">
           <div className="cell lo"><span className="lbl">Date</span><b>{new Date().toLocaleDateString(undefined, DATE_FMT)}</b></div>
           <div className="cell"><span className="lbl">Roster</span>
-            <b style={openSlots > 0 ? { color: 'var(--warn)' } : undefined}>{mine.length}/{s.rosterSize}</b>
+            <b style={openSlots > 0 ? { color: 'var(--warn)' } : undefined}>{activePlayers.length}/{s.rosterSize}</b>
             {openSlots > 0 && <span className="sub">{openSlots} open</span>}
           </div>
           <div className="cell"><span className="lbl">Lineup</span>
