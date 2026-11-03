@@ -1,20 +1,22 @@
 # Courtside
 
-Personal fantasy basketball dashboard. One page for the decisions that come up in a season: who to start tonight, who to pick up, whether a trade is fair, and what the news means.
+A fantasy basketball dashboard for the calls you make all season: who to start tonight, who to pick up, whether a trade is fair, and what the news means for your roster.
 
 Live: https://courtside-rose.vercel.app
 
 ## Pages
 
-- **Team** — your roster, the biggest problem on it, and the swap that fixes it.
-- **Matchup** — this week's head-to-head, live, with a projected result.
-- **Waivers** — free agents worth a pickup.
-- **Trade** — compares both sides of a trade.
-- **League** — league setup: scoring rules and league size.
-- **Scorecard** — how well the model's forecasts held up, replayed over last season.
-- **News** — player news tagged in plain English.
+| Page | What it does |
+|---|---|
+| Team | Shows your roster, flags its worst problem and offers the bench swap that fixes it |
+| Matchup | Tracks this week's head-to-head live and projects the result |
+| Waivers | Ranks free agents worth picking up |
+| Trade | Compares both sides of a trade |
+| League | Sets scoring rules and league size |
+| Scorecard | Replays last season week by week to show how often the forecasts were right |
+| News | Tags player news in plain English |
 
-Data comes from free public ESPN, RotoWire and Google News feeds. No API keys needed.
+Data comes from free public ESPN, RotoWire and Google News feeds, so you don't need any API keys.
 
 ## Run it
 
