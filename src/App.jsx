@@ -58,8 +58,10 @@ export default function App() {
   const ndata = useFetch('/api/news')
   const fdata = useFetch('/data/form.json') // written by worker/ingest.py; absent until it has run
   const ddata = useFetch('/data/dvp.json')  // same worker: what each team gives up by position
-  const mdata = useFetch('/data/matchups.json') // defender vs scorer, possession by possession
-  const xdata = useFetch('/data/friction.json') // flagrants and double technicals, both men named
+  // The next two (254 KB) feed only the player drawer, so they wait for its first open.
+  const [drawerSeen, setDrawerSeen] = useState(false)
+  const mdata = useFetch(drawerSeen ? '/data/matchups.json' : null) // defender vs scorer, possession by possession
+  const xdata = useFetch(drawerSeen ? '/data/friction.json' : null) // flagrants and double technicals, both men named
   const bdata = useFetch('/data/backtest.json') // npm run backtest: last season replayed through the engine
   // v3: the real ESPN slots (PF/C, two UT) replace the old three-UT guess; a new key drops the settings saved under it
   const [settings, setSettings] = useLocal('cs.settings.v3', DEFAULT_SETTINGS)
@@ -78,6 +80,7 @@ export default function App() {
   }, [])
   const league = useEspnLeague(espn.league ? espn : null)
   const [openId, setOpenId] = useState(null)
+  if (openId && !drawerSeen) setDrawerSeen(true)
   const [finding, setFinding] = useState(false)
   const [more, setMore] = useState(false)
   // Any page change closes the More sheet and starts the new page at its top. On a phone the

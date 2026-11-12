@@ -129,7 +129,9 @@ export function computeValues(players, settings = DEFAULT_SETTINGS) {
 
 // ---------- schedule ----------
 
-export const etToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+// Built once: constructing a formatter per call cost ~400 ms per Waivers sort.
+const ET_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' })
+export const etToday = () => ET_DATE.format(new Date())
 
 export function weekBounds(dateStr) {
   const d = new Date(dateStr + 'T12:00:00Z')

@@ -154,6 +154,7 @@ button.link:hover { color: var(--accent); }
 .tag.info { color: var(--info); background: rgba(79, 143, 214, 0.14); }
 .up { color: var(--good); } .down { color: var(--bad); }
 .tip { border-bottom: 1px dotted var(--dim); cursor: help; }
+.tip-pop { position: fixed; z-index: 90; transform: translateX(-50%); max-width: min(280px, calc(100vw - 16px)); padding: 6px 9px; background: var(--panel3); border: 1px solid var(--line2); box-shadow: var(--shadow-pop); color: var(--text); font: 12px/1.45 var(--sans); pointer-events: none; }
 .tag .tip, .tip .tag, .tip .badge { border: 0; }
 .tip:has(.tag), .tip:has(.badge), .tip:has(.dot) { border-bottom: 0; }
 
