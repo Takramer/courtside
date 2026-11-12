@@ -69,6 +69,22 @@ Charts carry an `aria-label` that says the same thing in words.
 
 Answer first, reason second, plain words. "You win 13 of 20 equally likely endings" before any method. "Open slots: Fri 7, Sat 6" before why it matters. No openers, no hype.
 
+## 8. A phone is its own layout, not a squeezed desktop
+
+- **Navigation sits under the thumb.** On a portrait phone or tablet the pages are a 5-tab bar at the bottom: Team, Week, Waivers, News, More. Landscape keeps the top row, because it has width but no height.
+- **Nothing important hides behind a sideways scroll.** Phone tables fold the player cell to two lines and narrow the week strip. Slot, player, week and value then fit a 390px screen; extra columns can still be swiped to.
+- **Touch targets are 44px** on any touchscreen (`pointer: coarse`), and a table's name cell is tappable across its whole area. Mice keep the denser sizes.
+- **Every field is 16px on touch,** so iOS never zooms the page when you tap it.
+- **Pinned chrome stays small.** Only the 48px top bar and the tab bar are fixed; the readout scrolls away.
+- **Safe areas are respected** (notch, home bar), and the app can be added to the home screen and runs standalone.
+
+The audit script behind these numbers loads every page at 320, 375, 393, 412, 852×393 and 768. It fails a page that:
+
+- scrolls sideways
+- has a tap target under 44px
+- has text under 12px
+- has an input that would make iOS zoom
+
 ## Anti-slop checklist
 
 Before shipping a screen, it fails if it has any of these:

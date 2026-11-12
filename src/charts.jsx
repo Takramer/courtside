@@ -71,6 +71,7 @@ export function WeekHead({ mon, today }) {
   return (
     <span className="wk head" aria-hidden="true">
       {weekDates(mon).map((d) => <i key={d} className={d === today ? 'now' : ''}>{dayName(d)[0]}</i>)}
+      <span className="wkspan">Mon–Sun</span>
       <b>left</b>
     </span>
   )

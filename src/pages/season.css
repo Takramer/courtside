@@ -33,7 +33,9 @@
 .teampage .roster tr.onir td:first-child { box-shadow: inset 2px 0 0 var(--line); }
 .teampage .roster tr.broken td { background: rgba(217, 83, 76, 0.1); }
 .teampage .roster tr.broken td:first-child { box-shadow: inset 2px 0 0 var(--bad); }
-.teampage .roster td.actions .btn { min-width: 28px; padding: 0 var(--s2); font-size: 15px; line-height: 1; }
+/* A bare ×: a column of boxed buttons was the loudest thing on the roster, for its rarest action. */
+.teampage .roster td.actions .btn { min-width: 28px; padding: 0 var(--s2); font-size: 16px; line-height: 1; border-color: transparent; color: var(--muted); }
+@media (hover: hover) { .teampage .roster td.actions .btn:hover:not(:disabled) { background: rgba(217, 83, 76, 0.12); border-color: transparent; color: var(--bad); } }
 
 .teampage .deskside { overflow: auto; overscroll-behavior: contain; }
 .teampage .read { padding: var(--s5) var(--s5) var(--s6); border-bottom: 1px solid var(--line); }
@@ -70,12 +72,12 @@ a.btn:hover { text-decoration: none; }
 
 /* ---------- Waivers ---------- */
 .dropnote { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: var(--s1) var(--s4); margin-top: var(--s5); padding: var(--s4) 0; border-top: 1px solid var(--line2); border-bottom: 1px solid var(--line); }
-.dropnote .lbl { font-size: 11px; }
+.dropnote .lbl { font-size: 12px; }
 .dropnote p { grid-column: 1 / -1; margin: var(--s2) 0 0; color: var(--muted); font-size: 14px; text-wrap: pretty; }
 .dropnote .tag { margin-left: 0; }
 .waiverpage .filters { margin: var(--s6) 0 var(--s3); gap: var(--s4) var(--s7); align-items: flex-end; }
 .fgroup { display: flex; flex-direction: column; gap: var(--s2); }
-.flabel { font-family: var(--cond); font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.flabel { font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 .wire tr.upgrade td { background: rgba(79, 180, 119, 0.07); }
 .wire tr.upgrade td.stick { background: #101a14; box-shadow: inset 2px 0 0 var(--good); }
 .wire td.stick .tag { vertical-align: 1px; }
@@ -110,5 +112,5 @@ a.btn:hover { text-decoration: none; }
   /* Thumbs, not a mouse: every control in a row gets a real tap target. */
   .btn.sm { min-height: 36px; }
   .teampage .roster td.actions .btn { min-width: 36px; }
-  .teampage .deskbar .search input { height: 38px; }
+  .teampage .deskbar .search input { height: 44px; font-size: 16px; }
 }

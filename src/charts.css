@@ -25,16 +25,17 @@
 .wk i.past:not(.g) { opacity: 0.5; }
 .wk i.now::after { content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 2px; border-radius: 1px; background: var(--accent); }
 .wk b { min-width: 2ch; margin-left: var(--s2); font-family: var(--mono); font-weight: 500; font-size: 14px; text-align: right; }
-.wk.head i { box-shadow: none; height: auto; font-style: normal; font-family: var(--cond); font-size: 11px; font-weight: 600; text-align: center; color: var(--muted); line-height: 1; }
+.wk.head i { box-shadow: none; height: auto; font-style: normal; font-family: var(--cond); font-size: 12px; font-weight: 600; text-align: center; color: var(--muted); line-height: 1; }
 .wk.head i.now { color: var(--accent); }
 .wk.head i.now::after { display: none; }
-.wk.head b { font-family: var(--cond); font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; }
+.wk.head .wkspan { display: none; }
+.wk.head b { font-family: var(--cond); font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; }
 tr.bench .wk i.g:not(.past), tr.onir .wk i.g:not(.past) { background: var(--muted); }
 
 /* ---------- Outcome dots ---------- */
 .dots { margin-top: var(--s5); }
 .dots .zero { stroke: var(--muted); stroke-width: 1; }
-.dots .zerolbl { font-family: var(--cond); font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+.dots .zerolbl { font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
 .dots .side { font-family: var(--sans); font-size: 13px; }
 .dots .win .dot { fill: var(--good); stroke: var(--bg); stroke-width: 2; paint-order: stroke; }
 .dots .loss .dot { fill: none; stroke: var(--bad); stroke-width: 2; }
@@ -118,9 +119,14 @@ tr.bench .wk i.g:not(.past), tr.onir .wk i.g:not(.past) { background: var(--mute
 .calib g:hover .pt { filter: brightness(1.2); }
 
 @media (max-width: 600px) {
+  /* Letters do not fit 8px cells: the header names the span instead. */
+  .wk.head i { display: none; }
+  .wk.head .wkspan { display: block; width: 68px; font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
   .rrow { grid-template-columns: minmax(64px, 30%) minmax(0, 1fr); gap: var(--s3); }
   .raxis { margin-left: calc(30% + var(--s3)); }
-  .barlist li { grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3.2em; }
+  /* Room on the right for "1,257 ±106", which sits past the whisker. */
+  .rtrack, .raxis { margin-right: 84px; }
+  .barlist li { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 2.6em; gap: var(--s2); }
   .nval { font-size: 12px; }
 }
 @media (forced-colors: active) {

@@ -210,7 +210,7 @@ export default function Team({ ctx }) {
                 <th className="num opt"><Tip text="How much he swings game to game, from last season's logs. A 30-point average that swings 18 is a different player from one that swings 6: the steady one wins close weeks, the wild one is how you win a week you should lose.">±</Tip></th>
                 <th className="num opt"><Tip text="Share of his team's games he actually played last season. 79% means he sat roughly one night in five.">Avl</Tip></th>
                 <th className="opt"><Tip text="Last 15 days compared with his usual level.">Form</Tip></th>
-                <th />
+                <th className="actions" />
               </tr></thead>
               <tbody>
                 {rows.map(({ slot, p, start }) => {

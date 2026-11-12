@@ -51,7 +51,9 @@ export default function Waivers({ ctx }) {
         ? <div className="dropnote">
           <span className="lbl">Your weakest player</span>
           <span><PlayerName ctx={ctx} p={worstMine} /> <span className="muted">value {fmt(worstVal)}</span></span>
-          <p>Rows marked <span className="tag good">upgrade</span> are clearly better than him. To swap: add the new player and drop {short} in your league app, then tap "I added him" here.</p>
+          <p>Rows marked <span className="tag good">upgrade</span> are clearly better than him. To swap: add the new player and drop {short} in your league app, then
+            <span className="wide-only"> tap "I added him" here.</span>
+            <span className="phone-only"> tap his name here and pick "On my team".</span></p>
         </div>
         : <p className="banner warn">Add your team on <a href="#team">My team</a> first so this page can mark which free agents are upgrades.</p>}
 
@@ -79,7 +81,7 @@ export default function Waivers({ ctx }) {
             <thead><tr><th className="stick">Player</th><th><Tip text="This week, Monday to Sunday: a filled cell is a game, the outlined one is today, the number is games left. For a one-week pickup, look for filled cells on the nights your roster is thin."><WeekHead mon={mon} today={today} /></Tip></th><th className="num"><ValueTip settings={settings} /></th>
               <th className="num opt"><Tip text="Last 15 days minus his usual level. Positive = playing better than expected.">Form</Tip></th>
               <th className="num"><Tip text="% of ESPN leagues where he is rostered, and the change today.">Owned</Tip></th>
-              {settings.format === 'cats' ? cats.map((c) => <th key={c.k} className="num" title={c.name}>{c.label}</th>) : <th className="num"><Tip text="Fantasy points per game, projected.">FPTS/G</Tip></th>}<th /></tr></thead>
+              {settings.format === 'cats' ? cats.map((c) => <th key={c.k} className="num" title={c.name}>{c.label}</th>) : <th className="num"><Tip text="Fantasy points per game, projected.">FPTS/G</Tip></th>}<th className="actions" /></tr></thead>
             <tbody>
               {list.map((p) => {
                 const v = values.get(p.id)

@@ -26,6 +26,9 @@ const TABS = [
   ['scorecard', 'Scorecard', Scorecard, 'Scorecard'],
   ['league', 'League setup', League, 'Setup'],
 ]
+// On a portrait phone the rail becomes a tab bar under the thumb. Five fit; these three sit
+// behind More. They are the pages you set up or check now and then, not every night.
+const MORE = new Set(['trade', 'scorecard', 'league'])
 const DATE_FMT = { weekday: 'short', day: 'numeric', month: 'short' }
 
 const OWNER_MSG = { mine: 'added to your team', taken: 'marked taken by another team', free: 'marked available' }
@@ -76,6 +79,19 @@ export default function App() {
   const league = useEspnLeague(espn.league ? espn : null)
   const [openId, setOpenId] = useState(null)
   const [finding, setFinding] = useState(false)
+  const [more, setMore] = useState(false)
+  // Any page change closes the More sheet and starts the new page at its top. On a phone the
+  // whole window scrolls, so without this a tab opened halfway down the page you left.
+  useEffect(() => {
+    setMore(false)
+    scrollTo(0, 0)
+    document.querySelector('.pane')?.scrollTo(0, 0)
+  }, [tab])
+  useEffect(() => {
+    if (!more) return undefined
+    const k = (e) => { if (e.key === 'Escape') setMore(false) }
+    addEventListener('keydown', k); return () => removeEventListener('keydown', k)
+  }, [more])
 
   // ⌘K / Ctrl+K anywhere, or "/" when not typing, opens the player finder.
   useEffect(() => {
@@ -198,7 +214,8 @@ export default function App() {
     newsBy, injuryBy, offCourtBy, status, avail, ledger, setLedger, setOwner, moveTo, toast, open: setOpenId, find: () => setFinding(true), newsUpdated: ndata.data?.updated,
     myPlayers, activePlayers, irPlayers,
   }
-  const Page = (TABS.find((t) => t[0] === tab) || TABS[0])[2]
+  const current = TABS.find((t) => t[0] === tab) || TABS[0]
+  const Page = current[2]
 
   // The readout bar carries the facts every page agrees on, in the same place on every page.
   // The week's win probability is deliberately not one of them: only This week can compute
@@ -224,14 +241,20 @@ export default function App() {
     <div className="app">
       <div className="rail">
         <a className="brand" href="#team" aria-label="Courtside — my team"><span className="ball" /></a>
+        {/* Phones only: which page this is, since the tab bar is at the other end of the screen. */}
+        <span className="railtitle" aria-hidden="true">{current[1]}</span>
         <nav aria-label="Pages">
           {TABS.map(([k, label, , short], i) => (
-            <a key={k} href={`#${k}`} className={tab === k ? 'on' : ''} title={`${label} (${i + 1})`}>
+            <a key={k} href={`#${k}`} className={`${tab === k ? 'on' : ''}${MORE.has(k) ? ' more' : ''}`} title={`${label} (${i + 1})`} aria-current={tab === k ? 'page' : undefined}>
               <span className="k">{i + 1}</span>{short}
             </a>
           ))}
+          <button className={`morebtn${MORE.has(tab) || more ? ' on' : ''}`} onClick={() => setMore((m) => !m)} aria-expanded={more} aria-controls="moresheet">
+            {MORE.has(tab) ? current[3] : 'More'}
+          </button>
         </nav>
         <button className="railfind" onClick={() => setFinding(true)} aria-label="Find a player">
+          <svg className="ficon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           <span className="k">{IS_MAC ? '\u2318K' : '^K'}</span>Find
         </button>
       </div>
@@ -241,7 +264,7 @@ export default function App() {
           <div className="cell lo"><span className="lbl">Date</span><b>{new Date().toLocaleDateString(undefined, DATE_FMT)}</b></div>
           <div className="cell"><span className="lbl">Roster</span>
             <b style={openSlots > 0 ? { color: 'var(--warn)' } : undefined}>{activePlayers.length}/{s.rosterSize}</b>
-            {openSlots > 0 && <span className="sub">{openSlots} open</span>}
+            {openSlots > 0 && <span className="sub key">{openSlots} open</span>}
           </div>
           <div className="cell"><span className="lbl">Lineup</span>
             <b style={lineupBad ? { color: 'var(--bad)' } : undefined}>{okStarters}/{startSlots.length}</b>
@@ -249,7 +272,7 @@ export default function App() {
           </div>
           <div className="cell"><span className="lbl">Tonight</span>
             <b style={overTonight ? { color: 'var(--warn)' } : undefined}>{ready ? tonightN : '–'}</b>
-            <span className="sub">{overTonight ? `${tonightN - startSlots.length} sit` : 'playing'}</span>
+            <span className={`sub${overTonight ? ' key' : ''}`}>{overTonight ? `${tonightN - startSlots.length} sit` : 'playing'}</span>
           </div>
           <div className="cell"><span className="lbl">Wk games</span><b>{ready ? wkGames : '–'}</b></div>
           <div className="cell"><span className="lbl">Out</span>
@@ -282,11 +305,22 @@ export default function App() {
         </span>
       </div>
 
+      {more && (
+        <div className="moresheet-scrim" onClick={() => setMore(false)}>
+          <div className="moresheet" id="moresheet" role="dialog" aria-label="More pages" onClick={(e) => e.stopPropagation()}>
+            {TABS.filter(([k]) => MORE.has(k)).map(([k, label]) => (
+              <a key={k} href={`#${k}`} className={tab === k ? 'on' : ''} aria-current={tab === k ? 'page' : undefined}>{label}</a>
+            ))}
+          </div>
+        </div>
+      )}
+
       {incoming && <LinkIn token={incoming}
         onDone={(conn) => { setEspn(conn); setIncoming(null); clearToken(); toast('Connected. Your league is on this device now.') }}
         onCancel={() => { setIncoming(null); clearToken() }} />}
       {ready && <PlayerFinder ctx={ctx} open={finding} setOpen={setFinding} pages={TABS} />}
-      <Toaster theme="dark" position="bottom-center" offset={36} toastOptions={{ className: 'toast' }} />
+      {/* On a phone the tab bar owns the bottom 56px, so toasts sit above it. */}
+      <Toaster theme="dark" position="bottom-center" offset={36} mobileOffset={{ bottom: 'calc(72px + env(safe-area-inset-bottom))' }} toastOptions={{ className: 'toast' }} />
       {openId && byId.get(openId) && <PlayerDrawer ctx={ctx} p={byId.get(openId)} onClose={() => setOpenId(null)} />}
     </div>
   )

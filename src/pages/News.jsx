@@ -67,7 +67,10 @@ export default function News({ ctx }) {
             <h2 id="inj-h">Injury report</h2>
             <small>{outN} out · {injured.length - outN} day-to-day</small>
           </header>
-          <p className="legend"><span className="badge out">Out</span> will not play. <span className="badge dtd">Day-to-day</span> might play; check an hour before the game.</p>
+          <p className="legend">
+            <span><span className="badge out">Out</span> will not play.</span>
+            <span><span className="badge dtd">Day-to-day</span> might play; check an hour before the game.</span>
+          </p>
           {injured.length ? (
             <ul>
               {injured.map((p) => {
