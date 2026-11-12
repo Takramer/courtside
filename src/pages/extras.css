@@ -60,7 +60,7 @@
 .tradepage .search { margin: var(--s2) 0; max-width: none; }
 .tradepage .pick { margin: var(--s2) 0 0; max-height: 460px; overflow-y: auto; }
 .tradepage .pick li { padding: 0; gap: var(--s3); transition: background-color 120ms; }
-.tradepage .pick li.on { background: rgba(243, 109, 33, 0.1); box-shadow: inset 0 0 0 1px rgba(243, 109, 33, 0.3); }
+.tradepage .pick li.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(232, 144, 58, 0.4); }
 .tradepage .pick label { display: flex; align-items: center; gap: var(--s3); width: 100%; padding: var(--s3); }
 .tradepage .get .pick li { padding: var(--s1) var(--s1) var(--s1) var(--s3); margin-bottom: var(--s1); }
 .tradepage .grow { flex: 1; min-width: 0; }
@@ -69,7 +69,7 @@
 .tradepage .rm:active { transform: scale(0.92); }
 @media (hover: hover) {
   .tradepage .pick li:not(.on):hover { background: var(--panel2); }
-  .tradepage .rm:hover { color: var(--bad); background: rgba(229, 72, 77, 0.1); }
+  .tradepage .rm:hover { color: var(--bad); background: rgba(217, 83, 76, 0.12); }
 }
 .tradepage .empty, .newspage .empty { margin-top: var(--s3); padding: var(--s4); border: 1px dashed var(--line2); color: var(--muted); font-size: 14px; text-wrap: pretty; }
 .tradepage .empty b, .newspage .empty b { color: var(--text); }
@@ -103,7 +103,7 @@
 /* ---------- News ---------- */
 .newspage .nfilters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s5); margin: var(--s5) 0 var(--s3); }
 .newspage .chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.newspage .chips button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--s3); border: 1px solid var(--line2); border-radius: var(--r-s); background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background-color 140ms, border-color 140ms, color 140ms; }
+.newspage .chips button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--s3); border: 1px solid var(--edge); border-radius: var(--r-s); background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background-color 140ms, border-color 140ms, color 140ms; }
 @media (hover: hover) { .newspage .chips button:hover { color: var(--text); border-color: var(--line2); } }
 .newspage .chips button.on { color: var(--text); background: var(--panel2); border-color: var(--accent); }
 .newspage .chips .tone { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
@@ -181,6 +181,9 @@
 .leaguepage .espnform label { display: flex; flex-direction: column; gap: var(--s2); font-family: var(--cond); font-size: 15px; color: var(--muted); }
 .leaguepage .espnform code { background: var(--panel2); padding: 1px 4px; border-radius: var(--r-s); }
 .leaguepage .espnlink .row { display: flex; gap: var(--s3); flex-wrap: wrap; margin-top: var(--s4); }
+
+.scrim .drawer .dweek { display: flex; align-items: center; gap: var(--s3); margin-top: var(--s3); }
+.scrim .drawer .barlist { margin: var(--s2) 0 var(--s3); }
 
 /* Defender rows he actually meets this week. Quiet: a left edge and a shade, so the eye
    finds them without the table turning into a traffic light. */

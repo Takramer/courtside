@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
 import { bestLineup, etToday, gamesBetween, weekBounds } from '../lib/model.js'
 import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt, heat } from '../components.jsx'
+import { BarList, NightBars, WeekHead, WeekStrip, dayName, weekDates } from '../charts.jsx'
+import { nightlyLoad, teamWeek } from '../lib/predict.js'
+import { priceSide } from './Matchup.jsx'
 import './season.css'
 
 export function PlayerSearch({ ctx, onPick, filter = () => true, placeholder = 'Add a player: type a name' }) {
@@ -123,7 +126,8 @@ function Events({ ctx, myPlayers }) {
 
 export default function Team({ ctx }) {
   const { myPlayers, activePlayers, irPlayers, values, settings, teams } = ctx
-  const [, weekEnd] = weekBounds(etToday())
+  const today = etToday()
+  const [weekStart, weekEnd] = weekBounds(today)
   // Best to worst is how he has always read this roster, so that is the default. The slot
   // column means lineup order is one click away without being the thing you land on.
   const [order, setOrder] = useState('value')
@@ -155,6 +159,17 @@ export default function Team({ ctx }) {
        ...irPlayers.map((p) => ({ slot: 'IR', p, start: false }))]
     : myPlayers.map((p) => ({ slot: slotFor(p), p, start: slotOf.has(p.id) }))
   const maxVal = Math.max(1, ...myPlayers.map((p) => values.get(p.id)?.val ?? 0))
+
+  // The rest of the week through the same engine as the win odds: each night the best
+  // healthy men fill the slots and the bench gets what is left. Two readings come out of
+  // it: how crowded each night is, and how many points each man should add by Sunday.
+  const nights = weekDates(weekStart).filter((d) => d >= today)
+  const priced = priceSide(ctx, { players: activePlayers }, today, weekEnd, ctx.formCurrent, Date.now()).players
+  const load = nightlyLoad(priced, nights)
+  const week = teamWeek(priced, { starts: slots.length, days: nights.length })
+  const carry = week.players.filter((p) => p.mu >= 0.5)
+  const crowded = nights.filter((_, i) => load[i] > slots.length)
+  const thin = nights.filter((d, i) => load[i] < slots.length && d > today)
 
   if (myPlayers.length === 0) {
     return (
@@ -189,7 +204,7 @@ export default function Team({ ctx }) {
                 <th className="num rk" style={{ width: 26 }}>#</th>
                 <th><Tip text="Where he goes in your ESPN lineup. G = any guard, F = any forward, PF/C = power forward or centre, UT = anyone, BN = bench and scores nothing, IR = injured reserve, which costs you no roster spot.">Slot</Tip></th>
                 <th className="stick">Player</th>
-                <th className="num"><Tip text="Games left this week (Mon–Sun). More games means more stats.">G</Tip></th>
+                <th><Tip text="This week, Monday to Sunday. A filled cell is a game; grey ones are played; the outlined cell is today. The number is games left. More games means more stats."><WeekHead mon={weekStart} today={today} /></Tip></th>
                 <th className="num"><ValueTip settings={settings} /></th>
                 {settings.format === 'cats' ? cats.map((c) => <th key={c.k} className="num" title={c.name}>{c.label}</th>) : <th className="num"><Tip text="Fantasy points per game, projected.">Fpts/g</Tip></th>}
                 <th className="num opt"><Tip text="How much he swings game to game, from last season's logs. A 30-point average that swings 18 is a different player from one that swings 6: the steady one wins close weeks, the wild one is how you win a week you should lose.">±</Tip></th>
@@ -208,7 +223,7 @@ export default function Team({ ctx }) {
                       <td className="num rk">{rankOf.get(p.id)}</td>
                       <td className="slot">{slot}</td>
                       <td className="stick"><PlayerName ctx={ctx} p={p} /></td>
-                      <td className="num">{games(p)}</td>
+                      <td><WeekStrip team={teams[p.team]} teams={teams} mon={weekStart} today={today} /></td>
                       <td className="heat"><i style={heat(v?.val, maxVal)} /><span>{fmt(v?.val)}</span></td>
                       {settings.format === 'cats' ? cats.map((c) => <ZCell key={c.k} z={v?.z[c.k]} />) : <td className="num muted">{fmt(v?.fp)}</td>}
                       <td className="num muted opt">{f ? fmt(f.fp_sd, 0) : '–'}</td>
@@ -230,6 +245,27 @@ export default function Team({ ctx }) {
             <h3>Worth knowing this week</h3>
             <Events ctx={ctx} myPlayers={myPlayers} />
           </div>
+
+          {nights.length > 0 && (
+            <div className="read">
+              <h3>Your nights left</h3>
+              <NightBars dates={nights} slots={slots.length} today={today} series={[{ name: 'You', tone: 'you', values: load }]} />
+              <small>
+                Players likely to play each night (a game-time decision counts as a coin flip, so not yet), against your {slots.length} slots.
+                {crowded.length > 0 && <> <b>{crowded.map(dayName).join(', ')}</b> {crowded.length === 1 ? 'has' : 'have'} more players than slots: someone sits whatever you do.</>}
+                {thin.length > 0 && <> Open slots: <b>{thin.map((d) => `${dayName(d)} ${slots.length - load[nights.indexOf(d)]}`).join(', ')}</b>. An empty slot scores nothing, so a pickup who plays those nights adds points without benching anyone.</>}
+                {!crowded.length && !thin.length && ' Every night fills its slots with nobody left over.'}
+              </small>
+            </div>
+          )}
+
+          {settings.format === 'points' && carry.length > 0 && (
+            <div className="read">
+              <h3>Points left this week</h3>
+              <BarList rows={carry.map((p) => ({ key: p.id, label: p.name, value: p.mu, digits: 0, sub: `${p.games}g`, onClick: () => ctx.open(p.id) }))} hi={carry[0]?.id} />
+              <small>About <b>{fmt(week.mu, 0)}</b> more by Sunday, give or take {fmt(week.sd, 0)}. Same engine as the win odds on This week, so a player who has to sit on a crowded night is only counted for the nights he gets a slot.</small>
+            </div>
+          )}
 
           {settings.format === 'cats' && (
             <div className="read">

@@ -1,6 +1,7 @@
 import React from 'react'
 import { evaluateTrade } from '../lib/model.js'
 import { fmt } from '../components.jsx'
+import { TradeScale } from '../charts.jsx'
 import { useLocal } from '../lib/store.js'
 import { PlayerSearch } from './Team.jsx'
 import './extras.css'
@@ -95,6 +96,7 @@ export default function Trade({ ctx }) {
               <div><small>Verdict</small><h2>{VERDICT[r.verdict][1]}</h2></div>
               <div className="tvnet"><small>Net value</small><b className="num">{signed(r.delta)}</b></div>
             </div>
+            <TradeScale delta={r.delta} unit={r.unit} />
             <p className="tvwhy">{VERDICT[r.verdict][2]}</p>
             <p className="tvmath">You give <b className="num">{fmt(r.giveVal)}</b> and get <b className="num">{fmt(r.getVal)}</b>.</p>
             {r.spots > 0 && <p>You also free {r.spots} roster spot{r.spots > 1 ? 's' : ''} to fill from waivers, which counts in your favor.</p>}

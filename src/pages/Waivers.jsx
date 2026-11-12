@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { etToday, gamesBetween, weekBounds } from '../lib/model.js'
 import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt, heat } from '../components.jsx'
+import { WeekHead, WeekStrip } from '../charts.jsx'
 import './season.css'
 
 const SORTS = [
@@ -15,8 +16,9 @@ export default function Waivers({ ctx }) {
   const { players, values, settings, teams } = ctx
   const [sort, setSort] = useState('val')
   const [pos, setPos] = useState('All')
-  const [, b] = weekBounds(etToday())
-  const games = (p) => gamesBetween(teams[p.team], etToday(), b).length
+  const today = etToday()
+  const [mon, b] = weekBounds(today)
+  const games = (p) => gamesBetween(teams[p.team], today, b).length
   const key = {
     val: (p) => values.get(p.id)?.val ?? -99,
     week: (p) => (values.get(p.id)?.val ?? -99) * games(p) + games(p) * 0.01,
@@ -74,7 +76,7 @@ export default function Waivers({ ctx }) {
       ) : (
         <div className="scroll">
           <table className="t wire">
-            <thead><tr><th className="stick">Player</th><th className="num"><Tip text="Games left this week (Mon–Sun). More games means more stats.">Wk G</Tip></th><th className="num"><ValueTip settings={settings} /></th>
+            <thead><tr><th className="stick">Player</th><th><Tip text="This week, Monday to Sunday: a filled cell is a game, the outlined one is today, the number is games left. For a one-week pickup, look for filled cells on the nights your roster is thin."><WeekHead mon={mon} today={today} /></Tip></th><th className="num"><ValueTip settings={settings} /></th>
               <th className="num opt"><Tip text="Last 15 days minus his usual level. Positive = playing better than expected.">Form</Tip></th>
               <th className="num"><Tip text="% of ESPN leagues where he is rostered, and the change today.">Owned</Tip></th>
               {settings.format === 'cats' ? cats.map((c) => <th key={c.k} className="num" title={c.name}>{c.label}</th>) : <th className="num"><Tip text="Fantasy points per game, projected.">FPTS/G</Tip></th>}<th /></tr></thead>
@@ -86,7 +88,7 @@ export default function Waivers({ ctx }) {
                 return (
                   <tr key={p.id} className={upgrade ? 'upgrade' : ''}>
                     <td className="stick"><PlayerName ctx={ctx} p={p} />{upgrade && <Tip text={`Clearly more valuable than ${worstMine.name}. Worth the swap.`}><span className="tag good">upgrade</span></Tip>}</td>
-                    <td className="num">{games(p)}</td>
+                    <td><WeekStrip team={teams[p.team]} teams={teams} mon={mon} today={today} /></td>
                     <td className="heat"><i style={heat(v?.val, maxVal)} /><span>{fmt(v?.val)}</span></td>
                     <td className="num opt">{v?.trend ? fmt(v.trend) : '–'}</td>
                     <td className="num">{fmt(p.own, 0)}% <small className={p.ownChg > 0 ? 'up' : p.ownChg < 0 ? 'down' : ''}>{p.ownChg > 0 ? '+' : ''}{fmt(p.ownChg)}</small></td>

@@ -6,9 +6,11 @@
 .matchuppage .tname { font-family: var(--cond); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); text-align: center; }
 .matchuppage .team b { font-family: var(--mono); font-size: 56px; line-height: 1; font-weight: 400; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
 .matchuppage .team.ahead .tname { color: var(--text); }
-.matchuppage .team.ahead b { color: var(--accent); }
+/* The leader reads brighter; amber stays reserved for "you" in the charts below. */
+.matchuppage .team b { color: var(--muted); }
+.matchuppage .team.ahead b { color: var(--text); }
 .matchuppage .vs { font-family: var(--cond); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-.matchuppage .verdict { text-align: center; color: var(--muted); margin: 0 0 var(--s7); }
+.matchuppage .verdict { text-align: center; color: var(--muted); margin: 0 0 var(--s7); padding: 0; border: 0; background: none; }
 .matchuppage .sides { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s7); }
 .matchuppage .side h3 { margin-top: 0; }
 .matchuppage .slot { font-family: var(--cond); font-size: 12px; letter-spacing: 0.08em; color: var(--muted); }
@@ -33,3 +35,12 @@
 @media (max-width: 700px) { :is(.matchuppage, .scorecard) .oddshead .big { font-size: 44px; } .matchuppage .team b { font-size: 38px; } }
 :is(.matchuppage, .scorecard) .odds > small { display: block; margin-top: var(--s3); max-width: 72ch; line-height: 1.55; }
 :is(.matchuppage, .scorecard) .odds > h3:first-child { margin-top: 0; }
+
+/* The charts inside the odds: headings get air, notes read as notes. */
+:is(.matchuppage, .scorecard) .odds h3 { margin: var(--s7) 0 var(--s3); }
+.matchuppage .chartnote { margin: var(--s3) 0 0; color: var(--muted); font-size: 14px; max-width: 68ch; text-wrap: pretty; }
+.matchuppage .oddsfacts { margin-top: var(--s6); }
+.matchuppage .rval small { color: var(--muted); font-size: 12px; }
+.calibpair { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: var(--s6); align-items: start; }
+.calibpair .calib figcaption { font-size: 13px; }
+@media (max-width: 760px) { .calibpair { grid-template-columns: minmax(0, 1fr); } }

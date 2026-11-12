@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo } from 'react'
 import { etToday, gameOn, gamesBetween, weekBounds } from '../lib/model.js'
-import { availability, opponentFactor, projectPlayer, weekOutlook } from '../lib/predict.js'
+import { availability, marginQuantiles, nightlyLoad, opponentFactor, projectPlayer, weekOutlook } from '../lib/predict.js'
 import { recordWeek } from '../lib/grade.js'
 import { Tip, fmt } from '../components.jsx'
+import { NightBars, OutcomeDots, RaceBars, weekDates } from '../charts.jsx'
 import { useMatchup } from '../lib/espn.js'
 import './matchup.css'
 
@@ -50,7 +51,8 @@ function Side({ ctx, side, today, label }) {
 
 // Turn one side of the ESPN matchup into something predict.js can price: a projection per
 // player, how many games he has left before Sunday, and who he draws in each of them.
-function priceSide(ctx, side, today, weekEnd, currentSeason, now) {
+// Team.jsx prices your own roster with it too, so both pages project the week the same way.
+export function priceSide(ctx, side, today, weekEnd, currentSeason, now) {
   const out = []
   let unknown = 0
   for (const p of side.players) {
@@ -85,7 +87,7 @@ export default function Matchup({ ctx }) {
   const live = useMatchup(ctx.espn.league && ctx.espn.team ? ctx.espn : null)
   const d = live.data
   const today = etToday()
-  const [, weekEnd] = weekBounds(today)
+  const [weekStart, weekEnd] = weekBounds(today)
   const slots = ctx.settings.slots.split(',').map((x) => x.trim()).filter(Boolean)
   // Days left in the fantasy week, today included: the lineup cap is per day, not per week,
   // and phase 8 records it so a Thursday forecast is never graded as a full-week claim.
@@ -101,10 +103,17 @@ export default function Matchup({ ctx }) {
     if (!mine.players.length || !theirs.players.length) return null
     // What is already on the board counts. Until phase 9 a Thursday forecast compared only
     // the games left, so a 300-point lead read as a coin flip.
+    const out = weekOutlook(mine.players, theirs.players, {
+      starts: slots.length, days: daysLeft, banked: [d.me.week || 0, d.opp.week || 0], sdScale: ctx.sdScale,
+    })
+    // What the pictures need on top of the numbers: twenty equally likely margins, and how
+    // many men each side has on each night left.
+    const nights = weekDates(weekStart).filter((x) => x >= today)
     return {
-      ...weekOutlook(mine.players, theirs.players, {
-        starts: slots.length, days: daysLeft, banked: [d.me.week || 0, d.opp.week || 0], sdScale: ctx.sdScale,
-      }),
+      ...out,
+      q: marginQuantiles(out.me, out.opp, 20, ctx.sdScale),
+      nights,
+      load: [nightlyLoad(mine.players, nights), nightlyLoad(theirs.players, nights)],
       unknown: mine.unknown + theirs.unknown,
     }
   }, [d, ctx.players, ctx.formBy, ctx.dvp, ctx.sdScale, today, weekEnd, currentSeason, slots.length, daysLeft])
@@ -174,7 +183,7 @@ export default function Matchup({ ctx }) {
             {' '}Week {d.matchupPeriod}, day {d.scoringPeriod}.
           </p>
 
-          {odds && <Odds odds={odds} updated={ctx.formUpdated} dvp={ctx.dvp} />}
+          {odds && <Odds odds={odds} updated={ctx.formUpdated} dvp={ctx.dvp} oppName={d.opp.name} slots={slots.length} today={today} />}
           <div className="sides">
             <Side ctx={ctx} side={d.me} today={today} label="Your day" />
             <Side ctx={ctx} side={d.opp} today={today} label={`${d.opp.name}'s day`} />
@@ -187,18 +196,22 @@ export default function Matchup({ ctx }) {
 
 const pct = (x) => `${Math.round(x * 100)}%`
 
-// The odds, and the four things worth knowing about them.
-function Odds({ odds, updated, dvp }) {
-  const { pWin, me, opp, gameEdge, swing, danger, matchupEdge, sdScale } = odds
+// The odds, and what they rest on. The number is the claim; the pictures under it are the
+// reasons: how the twenty endings fall, where both sides stand, which nights are crowded.
+function Odds({ odds, updated, dvp, oppName, slots, today }) {
+  const { pWin, me, opp, swing, danger, matchupEdge, sdScale } = odds
   const verdict = pWin > 0.8 ? 'You should win this'
     : pWin > 0.6 ? 'You are favoured'
       : pWin > 0.4 ? 'This is a coin flip'
         : pWin > 0.2 ? 'You are the underdog' : 'You need help'
+  const maxCost = Math.max(0.01, ...swing.map((p) => p.cost))
+  const [myNights, oppNights] = odds.load
+  const edge = myNights.reduce((n, v) => n + Math.min(v, slots), 0) - oppNights.reduce((n, v) => n + Math.min(v, slots), 0)
 
   return (
     <section className="odds">
       <div className="oddshead">
-        <span className="big" style={{ color: pWin >= 0.5 ? 'var(--good)' : 'var(--bad)' }}>{pct(pWin)}</span>
+        <span className="big">{pct(pWin)}</span>
         <div>
           <b>{verdict}</b>
           <small>
@@ -208,21 +221,39 @@ function Odds({ odds, updated, dvp }) {
         </div>
       </div>
 
-      <ul className="oddsfacts">
-        <li><b>{fmt(me.mu, 0)}</b> <span>your projected final, give or take {fmt(me.sd, 0)}{me.banked > 0 ? `, ${fmt(me.banked, 0)} of it already scored` : ''}</span></li>
-        <li><b>{fmt(opp.mu, 0)}</b> <span>his, give or take {fmt(opp.sd, 0)}{opp.banked > 0 ? `, ${fmt(opp.banked, 0)} already scored` : ''}</span></li>
-        <li><b>{gameEdge > 0 ? `+${gameEdge}` : gameEdge}</b> <span>games played edge: {me.games} left against {opp.games}</span></li>
-        {danger && <li><b>{fmt(danger.mu, 0)}</b> <span>his biggest threat: {danger.name}, over {danger.games} {danger.games === 1 ? 'game' : 'games'}</span></li>}
-        {matchupEdge != null && (
-          <li>
-            <b>{matchupEdge > 0 ? `+${fmt(matchupEdge, 1)}` : fmt(matchupEdge, 1)}</b>
-            <span>
-              <Tip text="Your total with the defences your players actually draw this week, minus the same total against an average defence. Guards, forwards and centres are priced separately.">from who you draw</Tip>
-              {' '}this week, against an average week
-            </span>
-          </li>
-        )}
-      </ul>
+      <OutcomeDots q={odds.q} oppName={oppName} />
+
+      <h3>Where the week stands</h3>
+      <RaceBars rows={[
+        { name: 'You', tone: 'you', now: me.banked, mu: me.mu, sd: me.sd },
+        { name: oppName, tone: 'opp', now: opp.banked, mu: opp.mu, sd: opp.sd },
+      ]} />
+
+      <h3>Players with a game, night by night</h3>
+      <NightBars dates={odds.nights} slots={slots} today={today} series={[
+        { name: 'You', tone: 'you', values: myNights },
+        { name: oppName, tone: 'opp', values: oppNights },
+      ]} />
+      <p className="chartnote">
+        {edge === 0 ? 'Even on usable games: the calendar is not deciding this one.'
+          : `${edge > 0 ? 'You have' : `${oppName} has`} ${Math.abs(edge)} more usable game${Math.abs(edge) === 1 ? '' : 's'} left. `}
+        {edge !== 0 && 'Games above the line need a slot that is already full, so they score nothing.'}
+      </p>
+
+      {(danger || matchupEdge != null) && (
+        <ul className="oddsfacts">
+          {danger && <li><b>{fmt(danger.mu, 0)}</b> <span>his biggest threat: {danger.name}, over {danger.games} {danger.games === 1 ? 'game' : 'games'}</span></li>}
+          {matchupEdge != null && (
+            <li>
+              <b>{matchupEdge > 0 ? `+${fmt(matchupEdge, 1)}` : fmt(matchupEdge, 1)}</b>
+              <span>
+                <Tip text="Your total with the defences your players actually draw this week, minus the same total against an average defence. Guards, forwards and centres are priced separately.">from who you draw</Tip>
+                {' '}this week, against an average week
+              </span>
+            </li>
+          )}
+        </ul>
+      )}
 
       {swing.length > 0 && (
         <>
@@ -230,7 +261,7 @@ function Odds({ odds, updated, dvp }) {
           <table className="t">
             <thead><tr>
               <th>Player</th><th className="num">Games</th><th className="num">Points</th>
-              <th className="num"><Tip text="How far the win chance above falls if he misses the rest of the week. Recomputed without him, not a share of the total.">If he sits</Tip></th>
+              <th className="num" style={{ width: 120 }}><Tip text="How far the win chance above falls if he misses the rest of the week. Recomputed without him, not a share of the total.">If he sits</Tip></th>
             </tr></thead>
             <tbody>
               {swing.map((p) => (
@@ -238,7 +269,7 @@ function Odds({ odds, updated, dvp }) {
                   <td>{p.name}</td>
                   <td className="num">{p.games}</td>
                   <td className="num">{fmt(p.points, 0)}</td>
-                  <td className="num strong">{p.cost > 0.005 ? `−${pct(p.cost)}` : '–'}</td>
+                  <td className="heat"><i style={{ '--o': (Math.max(0, p.cost) / maxCost) ** 0.6 * 0.5 }} /><span>{p.cost > 0.005 ? `−${pct(p.cost)}` : '–'}</span></td>
                 </tr>
               ))}
             </tbody>

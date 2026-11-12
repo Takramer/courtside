@@ -31,7 +31,7 @@
 .teampage .roster tr.onir td { color: var(--dim); }
 .teampage .roster tr.onir td.slot { color: var(--bad); }
 .teampage .roster tr.onir td:first-child { box-shadow: inset 2px 0 0 var(--line); }
-.teampage .roster tr.broken td { background: rgba(199, 69, 63, 0.1); }
+.teampage .roster tr.broken td { background: rgba(217, 83, 76, 0.1); }
 .teampage .roster tr.broken td:first-child { box-shadow: inset 2px 0 0 var(--bad); }
 .teampage .roster td.actions .btn { min-width: 28px; padding: 0 var(--s2); font-size: 15px; line-height: 1; }
 
@@ -40,6 +40,7 @@
 .teampage .read h3 { margin: 0 0 var(--s4); }
 .teampage .read small { display: block; margin-top: var(--s3); text-wrap: pretty; line-height: 1.55; }
 .teampage .read .catbars { margin: 0 0 var(--s3); }
+.teampage .read .barlist small { display: inline; margin-top: 0; }
 .teampage .evlist li { padding: var(--s2) 0; font-size: 14px; line-height: 1.5; text-wrap: pretty; }
 .teampage .evlist li:last-child { border-bottom: 0; }
 .teampage .cutlist li { padding: var(--s4) 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s2); }

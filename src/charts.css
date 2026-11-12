@@ -1,0 +1,128 @@
+/* Charts. Same tokens as the instrument: hairline axes one step off the surface, mono
+   numbers, condensed labels. Series: you = --accent, the other side = --info. Polarity:
+   --good / --bad, always with a shape or a word beside it. */
+.chart { margin: 0; min-width: 0; }
+.chart figcaption { margin-top: var(--s3); color: var(--muted); font-size: 14px; line-height: 1.55; max-width: 68ch; text-wrap: pretty; }
+.chart figcaption b { color: var(--text); font-weight: 600; }
+.chart svg { display: block; overflow: visible; }
+.chart svg text { font-family: var(--mono); font-size: 12px; fill: var(--muted); }
+.chart .axis, .chart .grid { stroke: var(--line2); stroke-width: 1; }
+.chart .hit { fill: transparent; }
+.legend { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s5); font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: var(--s2); }
+.sw { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
+.sw.you, .sw.solid { background: var(--accent); }
+.sw.opp { background: var(--info); }
+.sw.wash { background: var(--accent); opacity: 0.3; }
+.sw.whisk { height: 2px; background: var(--text); }
+.sw.cap { height: 0; border-top: 1px solid var(--muted); }
+
+/* ---------- Week strip: seven nights in a table cell ---------- */
+.wk { display: inline-flex; align-items: center; gap: 2px; vertical-align: middle; }
+.wk i { position: relative; display: block; width: 10px; height: 14px; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--line2); }
+.wk i.g { background: var(--text); box-shadow: none; }
+.wk i.g.past { background: var(--dim); opacity: 0.55; }
+.wk i.past:not(.g) { opacity: 0.5; }
+.wk i.now::after { content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 2px; border-radius: 1px; background: var(--accent); }
+.wk b { min-width: 2ch; margin-left: var(--s2); font-family: var(--mono); font-weight: 500; font-size: 14px; text-align: right; }
+.wk.head i { box-shadow: none; height: auto; font-style: normal; font-family: var(--cond); font-size: 11px; font-weight: 600; text-align: center; color: var(--muted); line-height: 1; }
+.wk.head i.now { color: var(--accent); }
+.wk.head i.now::after { display: none; }
+.wk.head b { font-family: var(--cond); font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; }
+tr.bench .wk i.g:not(.past), tr.onir .wk i.g:not(.past) { background: var(--muted); }
+
+/* ---------- Outcome dots ---------- */
+.dots { margin-top: var(--s5); }
+.dots .zero { stroke: var(--muted); stroke-width: 1; }
+.dots .zerolbl { font-family: var(--cond); font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+.dots .side { font-family: var(--sans); font-size: 13px; }
+.dots .win .dot { fill: var(--good); stroke: var(--bg); stroke-width: 2; paint-order: stroke; }
+.dots .loss .dot { fill: none; stroke: var(--bad); stroke-width: 2; }
+.dots g:hover .dot { filter: brightness(1.25); }
+.key { display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: -1px; }
+.key.win { background: var(--good); }
+.key.loss { box-shadow: inset 0 0 0 2px var(--bad); }
+
+/* ---------- Race bars ---------- */
+.race { display: flex; flex-direction: column; gap: var(--s3); margin-top: var(--s4); }
+.rrow { display: grid; grid-template-columns: minmax(80px, 160px) minmax(0, 1fr); align-items: center; gap: var(--s4); }
+.rname { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rtrack { position: relative; height: 22px; }
+.rtrack i { position: absolute; top: 2px; bottom: 2px; }
+.rtrack .banked { left: 0; border-radius: 0 2px 2px 0; }
+.rtrack .todo { opacity: 0.3; border-radius: 0 4px 4px 0; }
+.rtrack .whisk { top: 10px; bottom: auto; height: 2px; background: var(--text); }
+.rtrack .whisk::before, .rtrack .whisk::after { content: ''; position: absolute; top: -5px; width: 2px; height: 12px; background: var(--text); }
+.rtrack .whisk::before { left: 0; } .rtrack .whisk::after { right: 0; }
+.rtrack .mu { top: -1px; bottom: -1px; width: 2px; margin-left: -1px; background: var(--text); }
+.rrow.you .banked, .rrow.you .todo { background: var(--accent); }
+.rrow.opp .banked, .rrow.opp .todo { background: var(--info); }
+.rval { position: absolute; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 14px; font-weight: 500; white-space: nowrap; }
+.raxis { position: relative; height: 18px; margin-left: calc(clamp(80px, 22%, 160px) + var(--s4)); border-top: 1px solid var(--line2); }
+.raxis span { position: absolute; top: 4px; transform: translateX(-50%); font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.raxis span:first-child { transform: none; }
+.race .legend { margin-top: var(--s2); }
+
+/* ---------- Night bars ---------- */
+.nights .legend { margin-bottom: var(--s3); }
+.nplot { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--s2); padding-top: var(--s4); }
+.nday { display: flex; flex-direction: column; align-items: center; gap: var(--s1); min-width: 0; }
+.ncols { position: relative; display: flex; align-items: flex-end; justify-content: center; gap: 2px; width: 100%; height: 84px; }
+.ncols::after { content: ''; position: absolute; left: -4px; right: -4px; bottom: var(--cap); border-top: 1px solid var(--muted); }
+.ncol { position: relative; width: min(16px, 40%); height: 100%; }
+.ncol i { position: absolute; left: 0; right: 0; bottom: 0; }
+.ncol .used { border-radius: 2px 2px 0 0; }
+.ncol .over { border-radius: 2px 2px 0 0; opacity: 0.3; }
+.ncol.you i { background: var(--accent); }
+.ncol.opp i { background: var(--info); }
+.nday.past .ncol i { opacity: 0.35; }
+.nlbl { font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.nday.now .nlbl { color: var(--accent); }
+.nval { font-family: var(--mono); font-size: 13px; color: var(--text); white-space: nowrap; }
+.caplbl { position: absolute; right: 0; top: 0; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+/* ---------- Bar list ---------- */
+.barlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.barlist li { display: grid; grid-template-columns: minmax(0, 9.5em) minmax(0, 1fr) 3.5em; align-items: center; gap: var(--s3); font-size: 14px; }
+.blbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.blbl small { margin-left: var(--s2); font-size: 12px; }
+.btrack { height: 12px; }
+.btrack i { display: block; height: 100%; min-width: 2px; background: var(--dim); border-radius: 0 3px 3px 0; }
+.barlist li.hi .btrack i { background: var(--accent); }
+.barlist.all-hi .btrack i { background: var(--accent); }
+.bval { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ---------- Trade scale ---------- */
+.tscale { margin: var(--s5) 0 var(--s2); }
+.tzones { display: flex; font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.tzones span { text-align: center; padding-bottom: var(--s2); white-space: nowrap; overflow: hidden; }
+.tzones .yes { flex: 1; }
+.ttrack { position: relative; height: 16px; }
+.ttrack .zno, .ttrack .zyes, .ttrack .band { position: absolute; top: 0; bottom: 0; }
+.ttrack .zno { left: 0; background: rgba(217, 83, 76, 0.18); border-radius: 2px 0 0 2px; }
+.ttrack .zyes { right: 0; background: rgba(79, 180, 119, 0.18); border-radius: 0 2px 2px 0; }
+.ttrack .band { background: var(--panel3); }
+.ttrack .even { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--muted); }
+.ttrack .mark { position: absolute; top: -6px; bottom: -6px; width: 4px; margin-left: -2px; background: var(--text); border-radius: 2px; box-shadow: 0 0 0 2px var(--panel); }
+.tticks { position: relative; height: 34px; }
+.tticks span, .tticks b { position: absolute; top: 6px; transform: translateX(-50%); font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.tticks b { top: 18px; font-size: 14px; font-weight: 600; color: var(--text); }
+
+/* ---------- Calibration ---------- */
+.calib .ideal { stroke: var(--muted); stroke-width: 1; }
+.calib .miss { stroke: var(--bad); stroke-width: 1; }
+.calib .curve { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.calib .pt { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
+.calib .note { font-family: var(--sans); font-size: 12px; fill: var(--muted); font-style: italic; }
+.calib .axt { font-family: var(--sans); font-size: 12px; }
+.calib g:hover .pt { filter: brightness(1.2); }
+
+@media (max-width: 600px) {
+  .rrow { grid-template-columns: minmax(64px, 30%) minmax(0, 1fr); gap: var(--s3); }
+  .raxis { margin-left: calc(30% + var(--s3)); }
+  .barlist li { grid-template-columns: minmax(0, 7.5em) minmax(0, 1fr) 3.2em; }
+  .nval { font-size: 12px; }
+}
+@media (forced-colors: active) {
+  .wk i.g, .ncol i, .btrack i, .rtrack i { background: CanvasText; forced-color-adjust: none; }
+}

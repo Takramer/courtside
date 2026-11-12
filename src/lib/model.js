@@ -294,7 +294,8 @@ export function evaluateTrade(give, get, values, settings) {
   const delta = getVal - giveVal
   const unit = unitOf(settings)
   const verdict = delta > unit ? 'accept' : delta < -unit ? 'decline' : 'close'
-  return { giveVal, getVal, delta, cats, spots, verdict }
+  // unit goes back with the verdict so the trade page can draw where "close" ends.
+  return { giveVal, getVal, delta, cats, spots, verdict, unit }
 }
 
 // ---------- news ----------

@@ -92,6 +92,18 @@ const P = await import('./predict.js')
 assert.ok(Math.abs(P.normalCdf(0) - 0.5) < 1e-9)
 assert.ok(Math.abs(P.normalCdf(1.6449) - 0.95) < 1e-3)
 assert.ok(Math.abs(P.normalCdf(-1.96) - 0.025) < 1e-3)
+// The inverse undoes the forward, and the pictures agree with the number beside them.
+for (const z of [-2.5, -1, -0.2, 0, 0.7, 1.96, 3]) assert.ok(Math.abs(P.normalQuantile(P.normalCdf(z)) - z) < 2e-3, `quantile(cdf(${z}))`)
+assert.ok(Math.abs(P.normalQuantile(0.975) - 1.95996) < 1e-4)
+{
+  const me = { mu: 1050, sd: 90 }; const opp = { mu: 1000, sd: 80 }
+  const q = P.marginQuantiles(me, opp, 20, 1.1)
+  assert.equal(q.length, 20)
+  assert.ok(q.every((x, i) => i === 0 || x > q[i - 1]), 'sorted')
+  const p = P.winProbability({ mu: 1050, variance: 90 ** 2 }, { mu: 1000, variance: 80 ** 2 }, 1.1)
+  assert.equal(q.filter((x) => x > 0).length, Math.round(p * 20), 'dots on the winning side = win probability, rounded to twentieths')
+  assert.deepEqual(P.nightlyLoad([{ pPlay: 0.9, dates: ['a', 'b'] }, { pPlay: 0.5, dates: ['a'] }, { pPlay: 0.8, dates: ['b'] }], ['a', 'b', 'c']), [1, 2, 0])
+}
 
 // A player who never plays contributes nothing, and no uncertainty either.
 assert.deepEqual(P.playerDay({ mean: 40, sd: 12, pPlay: 0 }), { mu: 0, variance: 0 })
