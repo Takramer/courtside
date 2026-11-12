@@ -19,7 +19,7 @@ function Line({ ctx, p, today }) {
   return (
     <tr className={p.starting ? '' : 'bench'}>
       <td className="slot">{p.slot}</td>
-      <td>
+      <td className="who">
         {known ? <button className="link" onClick={() => ctx.open(p.id)}>{p.name}</button> : p.name}
         {out && <span className="tag bad">out</span>}
       </td>
