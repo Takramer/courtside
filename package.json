@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "check": "node src/lib/model.check.js",
-    "backtest": "node --no-warnings worker/backtest.mjs"
+    "backtest": "node --no-warnings worker/backtest.mjs",
+    "teamcheck": "NODE_USE_ENV_PROXY=1 node --no-warnings worker/teamcheck.mjs"
   },
   "dependencies": {
     "cmdk": "^1.1.1",

@@ -31,6 +31,8 @@ export const DEFAULT_SETTINGS = {
 
 // The team drafted on 2026-10-18. Loaded once, on a first visit with an empty roster; after that the app's own
 // Add and Drop are the record, so editing this list will not overwrite a roster you have already changed.
+// It is also the roster `npm run teamcheck` watches (the league is private, so the cloud check cannot read
+// ESPN's): keep it current after each add or drop.
 export const DEFAULT_ROSTER = [
   'Jamal Murray', 'Austin Reaves', 'Franz Wagner', 'Jayson Tatum', 'Anthony Davis',
   'Norman Powell', 'Michael Porter Jr.', 'Miles Bridges', 'Paul George', 'Brandon Ingram',
