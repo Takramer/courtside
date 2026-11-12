@@ -7,9 +7,14 @@
 :root {
   --bg: #0a0b0d; --panel: #101216; --panel2: #171a20; --panel3: #1f242c;
   --line: #1d2026; --line2: #2a2f38;
-  --text: #e8eaed; --muted: #7c838f; --dim: #555c66;
+  /* Text tokens, each at least 4.5:1 on --bg (WCAG 1.4.3): text 16.9, muted 7.6, dim 5.0.
+     --edge is the 3:1 outline a form control needs to be found at all (WCAG 1.4.11). */
+  --text: #e8eaed; --muted: #9aa1ac; --dim: #7a818c; --edge: #5c636e;
   --accent: #e8903a; --accent-ink: #140a02; --accent-soft: rgba(232, 144, 58, 0.14);
-  --good: #4fb477; --bad: #c7453f; --warn: #e8903a; --info: #5e91b8;
+  /* Status and series. --bad was #c7453f (4.1:1): too dim to read as text. Red and green
+     sit close for deuteranopia, so neither ever carries meaning alone — a word, a sign or a
+     filled/open shape always goes with it. --info doubles as the other side's series colour. */
+  --good: #4fb477; --bad: #d9534c; --warn: #e8903a; --info: #4f8fd6;
   --r-s: 2px; --r: 2px; --r-l: 2px;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
   --row: 34px; --rail: 80px; --barh: 46px; --status: 28px;
@@ -44,7 +49,7 @@ p { margin: 0 0 var(--s4); }
 .muted { color: var(--muted); }
 .strong { font-weight: 600; color: var(--text); }
 small { color: var(--muted); font-size: 13px; }
-.lbl { font-family: var(--cond); font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.lbl { font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 
 /* ---------- Shell: rail, readout bar, pane, status line ---------- */
 .app { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) var(--status); height: 100vh; height: 100dvh; }
@@ -54,7 +59,7 @@ small { color: var(--muted); font-size: 13px; }
 .ball { width: 15px; height: 15px; border-radius: 50%; background: var(--text); transition: background-color 140ms; }
 .brand:hover .ball { background: var(--accent); }
 nav { display: flex; flex-direction: column; align-items: stretch; width: 100%; }
-nav a { display: block; padding: var(--s3) 0; text-align: center; color: var(--dim); font-family: var(--cond); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; border-left: 2px solid transparent; transition: color 140ms, background-color 140ms; }
+nav a { display: block; padding: var(--s3) 0; text-align: center; color: var(--muted); font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; border-left: 2px solid transparent; transition: color 140ms, background-color 140ms; }
 nav a:hover { color: var(--text); text-decoration: none; }
 nav a.on { color: var(--text); background: var(--panel); border-left-color: var(--accent); }
 nav a .k { display: block; margin-bottom: 2px; font-family: var(--mono); font-size: 16px; font-weight: 500; letter-spacing: 0; line-height: 1.1; }
@@ -75,7 +80,7 @@ nav a .k { display: block; margin-bottom: 2px; font-family: var(--mono); font-si
 .loading { padding: var(--s7) var(--s6); color: var(--muted); }
 
 /* The status line: where every number on screen came from, and the keys that move it. */
-.statusbar { grid-column: 2; display: flex; align-items: center; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--dim); overflow: hidden; }
+.statusbar { grid-column: 2; display: flex; align-items: center; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--muted); overflow: hidden; }
 .statusbar span { padding: 0 var(--s4); line-height: calc(var(--status) - 1px); border-right: 1px solid var(--line); white-space: nowrap; }
 .statusbar .right { margin-left: auto; border-right: 0; display: flex; gap: var(--s3); }
 .statusbar .bad { color: var(--bad); }
@@ -104,7 +109,7 @@ nav a .k { display: block; margin-bottom: 2px; font-family: var(--mono); font-si
 
 /* ---------- Tables: 26px rows, mono numbers, no zebra, no boxes ---------- */
 .t { width: 100%; border-collapse: collapse; font-size: 14px; }
-.t th { text-align: left; font-family: var(--cond); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; padding: var(--s3) var(--s3) var(--s2); border-bottom: 1px solid var(--line2); position: sticky; top: 0; z-index: 2; background: var(--bg); white-space: nowrap; }
+.t th { text-align: left; font-family: var(--cond); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; padding: var(--s3) var(--s3) var(--s2); border-bottom: 1px solid var(--line2); position: sticky; top: 0; z-index: 2; background: var(--bg); white-space: nowrap; }
 .t td { height: var(--row); padding: 0 var(--s3); border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
 /* A gutter at each end: row stripes (upgrade, IR, selected) sit in it instead of on the text. */
 .t th:first-child, .t td:first-child { padding-left: var(--s3); }
@@ -114,7 +119,7 @@ nav a .k { display: block; margin-bottom: 2px; font-family: var(--mono); font-si
 .t.small { font-size: 13px; }
 .t.small td { height: 28px; }
 .t td.slot { font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: var(--muted); width: 52px; }
-.t tr.emptyrow td { background: rgba(199, 69, 63, 0.09); }
+.t tr.emptyrow td { background: rgba(217, 83, 76, 0.09); }
 .t tr.own-mine td { background: var(--accent-soft); }
 .t tr.own-taken td { opacity: 0.4; }
 .t tr.sel td { background: var(--panel2); }
@@ -136,16 +141,16 @@ button.link:hover { color: var(--accent); }
 .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--info); }
 .spark { display: inline-block; width: 48px; height: 12px; vertical-align: -2px; }
 
-.badge { font-family: var(--cond); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; padding: 2px 5px; border-radius: var(--r-s); }
+.badge { font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; padding: 2px 5px; border-radius: var(--r-s); }
 .badge.out { background: var(--bad); color: #fff; }
 .badge.dtd { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 /* Off-court: outlined and cool. It marks something to read, not a lineup decision. */
 .badge.flag { background: transparent; color: var(--info); box-shadow: inset 0 0 0 1px var(--info); }
 .tag { display: inline-block; font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; padding: 1px 6px; border-radius: var(--r-s); background: var(--panel2); color: var(--muted); margin-left: var(--s2); white-space: nowrap; }
 .tag.good { color: var(--good); background: rgba(79, 180, 119, 0.14); }
-.tag.bad { color: var(--bad); background: rgba(199, 69, 63, 0.14); }
+.tag.bad { color: var(--bad); background: rgba(217, 83, 76, 0.14); }
 .tag.warn { color: var(--warn); background: rgba(232, 144, 58, 0.14); }
-.tag.info { color: var(--info); background: rgba(94, 145, 184, 0.14); }
+.tag.info { color: var(--info); background: rgba(79, 143, 214, 0.14); }
 .up { color: var(--good); } .down { color: var(--bad); }
 .tip { border-bottom: 1px dotted var(--dim); cursor: help; }
 .tag .tip, .tip .tag, .tip .badge { border: 0; }
@@ -153,7 +158,7 @@ button.link:hover { color: var(--accent); }
 
 /* ---------- Controls: square, small, one job each ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); min-height: 36px; background: var(--text); color: var(--bg); border: 1px solid var(--text); border-radius: var(--r-s); padding: 0 var(--s4); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color 140ms, border-color 140ms, color 140ms; }
-.btn.ghost { background: transparent; color: var(--text); border-color: var(--line2); font-weight: 500; }
+.btn.ghost { background: transparent; color: var(--text); border-color: var(--edge); font-weight: 500; }
 @media (hover: hover) {
   .btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   .btn.ghost:hover:not(:disabled) { background: var(--panel2); border-color: var(--muted); color: var(--text); }
@@ -168,7 +173,7 @@ button.link:hover { color: var(--accent); }
 .seg button.on { color: var(--text); border-bottom-color: var(--accent); }
 .seg button:disabled { opacity: 0.4; }
 .seg input { background: none; border: 0; color: var(--text); font: inherit; padding: 0; margin-bottom: 4px; }
-input, select { background: var(--panel); border: 1px solid var(--line2); border-radius: var(--r-s); color: var(--text); font: inherit; font-size: 15px; padding: var(--s2) var(--s3); }
+input, select { background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-s); color: var(--text); font: inherit; font-size: 15px; padding: var(--s2) var(--s3); }
 input::placeholder { color: var(--dim); }
 input:focus { outline: 1px solid var(--accent); outline-offset: -1px; }
 input[type=checkbox] { accent-color: var(--accent); }
@@ -178,13 +183,13 @@ input[type=number], input.num { font-family: var(--mono); }
 
 /* A note that needs reading, marked on its left edge. The alert strip is its loud sibling. */
 .banner { padding: var(--s3) var(--s4); border-radius: 0; margin: var(--s4) 0; border-left: 2px solid var(--line2); background: var(--panel); font-size: 14px; }
-.banner.bad { border-left-color: var(--bad); background: rgba(199, 69, 63, 0.09); }
+.banner.bad { border-left-color: var(--bad); background: rgba(217, 83, 76, 0.09); }
 .banner.warn { border-left-color: var(--warn); background: rgba(232, 144, 58, 0.09); }
 .callout { background: var(--panel); border-left: 2px solid var(--accent); border-radius: 0; padding: var(--s5); }
 .callout p { margin: 0 0 var(--s3); color: var(--muted); }
 
 /* The one thing that is wrong, always the first row of the pane, with its fix attached. */
-.alertstrip { display: flex; align-items: center; gap: var(--s4); padding: var(--s3) var(--s6); border-bottom: 1px solid var(--line); background: rgba(199, 69, 63, 0.1); box-shadow: inset 2px 0 0 var(--bad); }
+.alertstrip { display: flex; align-items: center; gap: var(--s4); padding: var(--s3) var(--s6); border-bottom: 1px solid var(--line); background: rgba(217, 83, 76, 0.1); box-shadow: inset 2px 0 0 var(--bad); }
 .alertstrip.warn { background: rgba(232, 144, 58, 0.09); box-shadow: inset 2px 0 0 var(--warn); }
 .alertstrip .tagx { flex: none; font-family: var(--cond); font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 7px; background: var(--bad); color: #fff; }
 .alertstrip.warn .tagx { background: var(--warn); color: var(--accent-ink); }
@@ -266,7 +271,7 @@ ul.plain li { padding: var(--s3) 0; border-bottom: 1px solid var(--line); }
 
 /* ---------- Player finder ---------- */
 /* The finder sits at the foot of the rail, built like a rail item so the column reads as one list. */
-.railfind { margin-top: auto; width: 100%; padding: var(--s3) 0; background: none; border: 0; border-left: 2px solid transparent; color: var(--dim); font-family: var(--cond); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; transition: color 140ms; }
+.railfind { margin-top: auto; width: 100%; padding: var(--s3) 0; background: none; border: 0; border-left: 2px solid transparent; color: var(--muted); font-family: var(--cond); font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; transition: color 140ms; }
 .railfind .k { display: block; margin-bottom: 2px; font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0; line-height: 1.3; }
 .railfind:hover { color: var(--text); }
 
@@ -278,7 +283,7 @@ kbd { font-family: var(--mono); font-size: 11px; color: var(--dim); padding: 1px
 .cmdk { position: fixed; z-index: 61; top: 12vh; left: 50%; transform: translateX(-50%); width: min(580px, calc(100% - 24px)); background: var(--panel); border: 1px solid var(--line2); box-shadow: var(--shadow-pop); overflow: hidden; transform-origin: top center; animation: pop 160ms var(--ease-out); }
 .cmdk [cmdk-input] { width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; padding: var(--s4) var(--s4); font-size: 16px; outline: none; }
 .cmdk [cmdk-list] { max-height: min(400px, 60vh); overflow-y: auto; overscroll-behavior: contain; padding: 4px; }
-.cmdk [cmdk-group-heading] { font-family: var(--cond); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); padding: var(--s3) var(--s3) var(--s1); }
+.cmdk [cmdk-group-heading] { font-family: var(--cond); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); padding: var(--s3) var(--s3) var(--s1); }
 .cmdk [cmdk-item] { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-radius: var(--r-s); cursor: pointer; font-size: 14px; }
 .cmdk [cmdk-item][data-selected='true'] { background: var(--panel3); }
 .cmdk [cmdk-item] .grow { flex: 1; min-width: 0; display: flex; gap: 7px; align-items: baseline; }

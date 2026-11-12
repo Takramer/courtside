@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react'
 import { isFullWeek, score, settle } from '../lib/grade.js'
 import { useHistory } from '../lib/espn.js'
 import { Tip, fmt } from '../components.jsx'
+import { Calibration } from '../charts.jsx'
 import './season.css'
 
 const pct = (x) => `${Math.round(x * 100)}%`
@@ -96,7 +97,10 @@ function Replay({ bt, sdScale }) {
         </li>
       </ul>
       <h4>Where it is wrong</h4>
-      <Buckets rows={bt.buckets} />
+      <div className="calibpair">
+        <Calibration buckets={bt.buckets} />
+        <Buckets rows={bt.buckets} />
+      </div>
       <small className="muted">Replayed {new Date(bt.updated).toLocaleDateString()}. {bt.note}</small>
     </section>
   )
@@ -225,7 +229,10 @@ export default function Scorecard({ ctx }) {
             {s.buckets.length > 0 && (
               <>
                 <h4>Where it is wrong</h4>
-                <Buckets rows={s.buckets} />
+                <div className="calibpair">
+                  <Calibration buckets={s.buckets} />
+                  <Buckets rows={s.buckets} />
+                </div>
                 <small className="muted">
                   A model can be right overall and badly wrong in one band. Over-confidence
                   shows up here as a big negative gap in the 70&ndash;100% rows.

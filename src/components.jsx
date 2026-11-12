@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Command } from 'cmdk'
-import { CATS, etToday, gamesBetween, tagNews, weekBounds } from './lib/model.js'
+import { CATS, etToday, fantasyPoints, gamesBetween, tagNews, weekBounds } from './lib/model.js'
+import { BarList, WeekStrip } from './charts.jsx'
 import { defenderHistory, frictionFor } from './lib/predict.js'
 import './pages/extras.css'
 
@@ -55,7 +56,8 @@ export function PlayerName({ ctx, p, sub = true }) {
 
 export function ZCell({ z }) {
   const c = Math.max(-2.5, Math.min(2.5, z ?? 0)) / 2.5
-  const bg = c >= 0 ? `rgba(34,197,94,${c * 0.55})` : `rgba(239,68,68,${-c * 0.55})`
+  // The app's own green and red, not a framework's: a z-cell is the same good and bad as every badge.
+  const bg = c >= 0 ? `rgba(79,180,119,${c * 0.5})` : `rgba(217,83,76,${-c * 0.5})`
   return <td className="num z" style={{ background: bg }}>{fmt(z, 1)}</td>
 }
 
@@ -102,12 +104,37 @@ export function plainTake(ctx, p) {
   if (v.trend < -(settings.format === 'points' ? 4 : 1.5)) out.push('Playing below his projection over the last 15 days (cold). Check the news for a reason.')
   if (v.line.gp < 60) out.push(`Projected for only ${Math.round(v.line.gp)} games, so expect missed time.`)
   const [a, b] = weekBounds(etToday())
-  out.push(`${gamesBetween(ctx.teams[p.team], a, b).length} games this week.`)
+  const all = gamesBetween(ctx.teams[p.team], a, b).length
+  const left = gamesBetween(ctx.teams[p.team], etToday(), b).length
+  out.push(`${all} game${all === 1 ? '' : 's'} this week, ${left} still to play.`)
   if (p.adp) out.push(`Fantasy managers usually draft him around pick #${Math.round(p.adp)}; on ${fmt(p.own, 0)}% of ESPN teams.`)
   return out
 }
 
 const LINE_ROWS = [['proj', 'Projection (this season)'], ['cur', 'This season so far'], ['l15', 'Last 15 days'], ['last', 'Last season']]
+// The same stretches in the order they happened, for the bar chart: read top to bottom it is
+// the direction he is heading.
+const STRETCHES = [['last', 'Last season'], ['proj', 'Projected'], ['cur', 'This season'], ['l15', 'Last 15 days']]
+
+// Fantasy points a game in each stretch, in this league's scoring. The latest stretch is the
+// one lit; the others are the baseline it is read against.
+function Stretches({ ctx, p }) {
+  const rows = STRETCHES.filter(([k]) => p.stats[k]?.gp > 0 || (k === 'proj' && p.stats[k]))
+    .map(([k, label]) => ({ key: k, label, value: fantasyPoints(p.stats[k], ctx.settings.weights), sub: k === 'proj' ? '' : `${Math.round(p.stats[k].gp)}g` }))
+  if (rows.length < 2) return null
+  const latest = rows[rows.length - 1]
+  const proj = rows.find((r) => r.key === 'proj')
+  const diff = proj && latest.key !== 'proj' ? latest.value - proj.value : null
+  return (
+    <>
+      <h3>Fantasy points a game</h3>
+      <BarList rows={rows} hi={latest.key} />
+      {diff != null && Math.abs(diff) >= 1 && (
+        <small className="muted">{latest.label}: {diff > 0 ? '+' : '\u2212'}{fmt(Math.abs(diff))} a game against his projection{Math.abs(diff) >= 4 ? (diff > 0 ? ', a real hot streak' : ', a real slump: check the news') : ''}.</small>
+      )}
+    </>
+  )
+}
 
 const STAT_HEAD = [['MIN', 'Minutes'], ['PTS', 'Points'], ['REB', 'Rebounds'], ['AST', 'Assists'], ['STL', 'Steals'], ['BLK', 'Blocks'], ['3PM', '3-pointers made'], ['FG%', 'Field goal %'], ['FT%', 'Free throw %'], ['TO', 'Turnovers (lower is better)'], ['GP', 'Games played']]
 const OWNERS = [['mine', 'On my team'], ['taken', 'Another team'], ['free', 'Available']]
@@ -228,6 +255,7 @@ export function PlayerDrawer({ ctx, p, onClose }) {
           <div className="dtitle">
             <h2 id="drawer-title">{p.name} <StatusBadge ctx={ctx} p={p} /> <FlagBadge ctx={ctx} p={p} /></h2>
             <div className="muted">{ctx.teams[p.team]?.name || 'Free agent'} · {p.pos.join('/')}</div>
+            {ctx.teams[p.team] && <div className="dweek"><span className="lbl">This week</span><WeekStrip team={ctx.teams[p.team]} teams={ctx.teams} mon={weekBounds(etToday())[0]} today={etToday()} /></div>}
           </div>
           <button className="x" onClick={onClose} aria-label="Close player panel">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
@@ -268,6 +296,8 @@ export function PlayerDrawer({ ctx, p, onClose }) {
             ))}
           </div>
         </>}
+
+        {ctx.settings.format === 'points' && <Stretches ctx={ctx} p={p} />}
 
         <h3>Stats per game</h3>
         <div className="scroll dstats">

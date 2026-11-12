@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useFetch, useLocal } from './lib/store.js'
 import { useEspnLeague } from './lib/espn.js'
 import { clearToken, tokenInUrl, unpack } from './lib/link.js'
-import { bestLineup, computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, etToday, gamesBetween, normName, splitIR, tagNews, weekBounds } from './lib/model.js'
+import { bestLineup, computeValues, DEFAULT_ROSTER, DEFAULT_SETTINGS, etToday, gameOn, gamesBetween, normName, splitIR, tagNews, weekBounds } from './lib/model.js'
 import { availability } from './lib/predict.js'
 import { score, spreadScale } from './lib/grade.js'
 import { Toaster, toast } from 'sonner'
@@ -216,6 +216,9 @@ export default function App() {
   const starters = bestLineup(activePlayers, startSlots).starters
   const okStarters = starters.filter((r) => r.player && status(r.player) === 'ok').length
   const lineupBad = okStarters < startSlots.length
+  // Tonight: healthy active players with a game, against the slots. Over means someone sits.
+  const tonightN = activePlayers.filter((p) => gameOn(teams[p.team], etToday()) && status(p) !== 'out').length
+  const overTonight = tonightN > startSlots.length
 
   return (
     <div className="app">
@@ -243,6 +246,10 @@ export default function App() {
           <div className="cell"><span className="lbl">Lineup</span>
             <b style={lineupBad ? { color: 'var(--bad)' } : undefined}>{okStarters}/{startSlots.length}</b>
             <span className="sub">{lineupBad ? 'will play' : 'all set'}</span>
+          </div>
+          <div className="cell"><span className="lbl">Tonight</span>
+            <b style={overTonight ? { color: 'var(--warn)' } : undefined}>{ready ? tonightN : '–'}</b>
+            <span className="sub">{overTonight ? `${tonightN - startSlots.length} sit` : 'playing'}</span>
           </div>
           <div className="cell"><span className="lbl">Wk games</span><b>{ready ? wkGames : '–'}</b></div>
           <div className="cell"><span className="lbl">Out</span>

@@ -6,9 +6,12 @@ Vite + React front end, four Vercel functions in `api/`. No database, no account
 - `api/news.js` — RotoWire RSS + ESPN headlines + ESPN injury report; `?player=Name` searches Google News RSS (last 14 days).
 - `api/league.js`, `api/matchup.js` — the connected league: rosters, free agents, and this week's live head-to-head. Need the user's ESPN cookies, which never leave the browser.
 - `src/lib/model.js` — all fantasy math (projection blend, z-scores, value over replacement, lineup matching, snake draft, trade check, news tags). Pure functions.
+- `src/charts.jsx` — the pictures: week strip, 20-dot outcome plot, race bars, night bars, bar list, trade scale, calibration. Plain SVG/CSS, no chart library. Follow `docs/design/PRINCIPLES.md` (amber = you, blue = them, red/green never alone, text tokens ≥4.5:1) for any new chart.
 - `src/lib/predict.js` — the prediction engine: a projection per player, the week's win probability, the opponent adjustment, availability, and the matchup/friction lookups. Pure functions.
 - `src/lib/grade.js` — phase 8: records each week's forecast before the games (`cs.ledger.v1`), settles it against ESPN's finals, and scores it. Brier against a 0.25 coin-flip baseline, plus bias and spread on the points projection. Pure functions.
 - `worker/ingest.py` — runs on the Mac, not a server (NBA blocks datacenter IPs). Pulls game logs into `worker/courtside.db` (SQLite, gitignored) and writes `public/data/*.json`, which are committed and served as static files. `python ingest.py all` is the nightly job; `pbp` is separate and slow. See `docs/engine/PLAN.md`.
+
+- `worker/teamcheck.mjs` — `npm run teamcheck`: prints a Markdown report on the roster in `DEFAULT_ROSTER` (tonight's games, injuries, games left, a waiver idea), calling the `api/` handlers in-process and the same model.js/predict.js math the app uses. A scheduled cloud session runs it twice a day in the `courtside` environment, which allows the four data hosts. The league is private, so update `DEFAULT_ROSTER` after each roster move.
 
 - `worker/backtest.mjs` — `npm run backtest`: replays last season week by week through predict.js and grade.js, reading `worker/courtside.db`, and writes `public/data/backtest.json`. The Scorecard shows it and the live odds use its spread correction. Re-run it after any change to predict.js.
 
