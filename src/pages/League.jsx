@@ -13,7 +13,12 @@ function NumField({ value, min, max, onCommit, step }) {
   return (
     <input type="number" inputMode={step ? 'decimal' : 'numeric'} min={min} max={max} step={step} value={text}
       onChange={(e) => { setText(e.target.value); const n = +e.target.value; if (e.target.value !== '' && ok(n) && n !== value) onCommit(n) }}
-      onBlur={() => { const n = Math.max(min, Math.min(max, Math.round(+text) || min)); setText(String(n)); if (n !== value) onCommit(n) }} />
+      onBlur={() => {
+        const v = +text
+        // Unparseable or empty: keep the last good value. (Was `|| min`, which turned a typed 0 into min.)
+        const n = text.trim() === '' || !Number.isFinite(v) ? value : Math.max(min, Math.min(max, step ? v : Math.round(v)))
+        setText(String(n)); if (n !== value) onCommit(n)
+      }} />
   )
 }
 
@@ -69,7 +74,7 @@ export default function League({ ctx }) {
             <legend className="lname">Points per stat</legend>
             <div className="weights">
               {Object.keys(DEFAULT_WEIGHTS).map((k) => (
-                <label key={k}>{WEIGHT_LABELS[k]}<input type="number" step="0.5" value={s.weights[k] ?? 0} onChange={(e) => set('weights', { ...s.weights, [k]: +e.target.value })} /></label>
+                <label key={k}>{WEIGHT_LABELS[k]}<NumField step="0.5" min={-20} max={20} value={s.weights[k] ?? 0} onCommit={(v) => set('weights', { ...s.weights, [k]: v })} /></label>
               ))}
             </div>
             <small>Defaults match Grace One Charlotte FBL: ESPN points scoring, except a made free throw nets +1 and a miss −1.</small>

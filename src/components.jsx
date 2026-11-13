@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Command } from 'cmdk'
 import { CATS, etToday, fantasyPoints, gamesBetween, tagNews, weekBounds } from './lib/model.js'
 import { BarList, WeekStrip } from './charts.jsx'
@@ -16,8 +17,27 @@ export const ago = (iso) => {
 // but only one of them is nearly worthless. Gamma 0.6, ceiling 0.5.
 export const heat = (val, max) => ({ '--o': (Math.max(0, val ?? 0) / (max || 1)) ** 0.6 * 0.5 })
 
+// Shows on hover, keyboard focus and tap (a tap focuses it). The text sits in a hidden span
+// the anchor points at, so screen readers hear it; the visible copy is portalled to <body>
+// so the scrolling panes and tables cannot clip it.
 export function Tip({ children, text }) {
-  return <span className="tip" title={text} tabIndex={0} data-tip={text}>{children}</span>
+  const id = useId()
+  const [at, setAt] = useState(null)
+  const hide = () => setAt(null)
+  const show = (e) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const left = Math.min(Math.max(r.left + r.width / 2, 140), innerWidth - 140)
+    setAt(r.bottom + 90 > innerHeight ? { left, bottom: innerHeight - r.top + 6 } : { left, top: r.bottom + 6 })
+    addEventListener('scroll', hide, { capture: true, once: true })
+  }
+  return (
+    <span className="tip" tabIndex={0} aria-describedby={id} onMouseEnter={show} onMouseLeave={hide}
+      onFocus={show} onBlur={hide} onKeyDown={(e) => e.key === 'Escape' && hide()}>
+      {children}
+      <span id={id} hidden>{text}</span>
+      {at && createPortal(<span className="tip-pop" aria-hidden="true" style={at}>{text}</span>, document.body)}
+    </span>
+  )
 }
 
 export function StatusBadge({ ctx, p }) {
