@@ -21,14 +21,18 @@
 //     out, which is roughly what the report would have said. Late scratches are not caught.
 //   - Position slots. Lineups here are the best ten each night, the same simplification
 //     predict.js makes. Real ESPN slots bench a third centre now and then.
+// Engine v2 (2026-11-19): each man is priced the way the site prices him, minutes-first form,
+// a chance of playing per game, back-to-backs and the return discount, through priceGames.
+// The drafts and lineups still use the plain last-25 mean, so v1 and v2 grade the same weeks.
 // So it grades the parts of the engine that do the most work — the spread, the availability
 // mixture, the nightly cap, the defence table and the bell curve — and not the rest.
 
+import assert from 'node:assert/strict'
 import { writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { weekBounds } from '../src/lib/model.js'
-import { opponentFactor, projectPlayer, teamWeek, winProbability } from '../src/lib/predict.js'
+import { isB2B, priceGames, projectPlayer, teamWeek, winProbability } from '../src/lib/predict.js'
 import { score, spreadScale } from '../src/lib/grade.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -56,6 +60,30 @@ function rng(seed) {
   }
 }
 const gauss = (r) => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r())
+
+/**
+ * His form row, as ingest.py form_rows writes it. `games` newest first.
+ *   fp_mean, fp_sd, g  the last 25, as before
+ *   min_proj           minutes, half as much weight every 8 games back
+ *   fp_proj            min_proj times points per minute, which moves slowly (half-life 40
+ *                      games) and is pulled to the pool's 1.276 a minute by 100 minutes
+ * Minutes move fast and scoring rate does not; on weeks 3-13 of 2025-26 this beat every
+ * plain or decayed average (worker/experiments/01-player.mjs).
+ */
+export function formFrom(games) {
+  const last = games.slice(0, FORM_GAMES)
+  const fps = last.map((r) => r.fp)
+  const m = fps.reduce((a, b) => a + b, 0) / fps.length
+  const sd = Math.sqrt(fps.reduce((a, b) => a + (b - m) ** 2, 0) / (fps.length - 1))
+  let a = 0; let b = 0; let x = 0; let y = 0
+  games.forEach((r, k) => {
+    const wm = 0.5 ** (k / 8)
+    const wr = 0.5 ** (k / 40)
+    a += wm * r.min; b += wm; x += wr * r.fp; y += wr * r.min
+  })
+  const min = a / b
+  return { fp_mean: m, fp_sd: sd, g: last.length, min_proj: min, fp_proj: min * ((x + 100 * 1.276) / (y + 100)) }
+}
 
 const opponentOf = (matchup) => {
   const parts = (matchup || '').split(' ')
@@ -97,6 +125,7 @@ export function replay(logs, { pos = {}, leagues = 40, teams = 10, roster = 13, 
   const mondays = [...new Set(rows.map((r) => weekBounds(r.date)[0]))].sort()
   const hist = new Map() // pid -> his games so far, oldest first
   const sched = new Map() // team -> game ids so far, oldest first
+  const lastDate = new Map() // team -> date of its latest game so far, for back-to-backs
   const seen = new Set()
   const prior = []
   const ledger = {}
@@ -112,6 +141,7 @@ export function replay(logs, { pos = {}, leagues = 40, teams = 10, roster = 13, 
         seen.add(`${r.team}|${r.gid}`)
         if (!sched.has(r.team)) sched.set(r.team, [])
         sched.get(r.team).push(r.gid)
+        lastDate.set(r.team, r.date)
       }
       prior.push(r)
     }
@@ -141,26 +171,30 @@ export function replay(logs, { pos = {}, leagues = 40, teams = 10, roster = 13, 
     // Everyone the engine could have priced on Monday morning, as form.json would have had him.
     const pool = []
     for (const [pid, h] of hist) {
-      const last = h.slice(-FORM_GAMES)
-      if (last.length < MIN_GAMES) continue
-      const fps = last.map((r) => r.fp)
-      const m = fps.reduce((a, b) => a + b, 0) / fps.length
-      const sd = Math.sqrt(fps.reduce((a, b) => a + (b - m) ** 2, 0) / (fps.length - 1))
+      if (h.length < MIN_GAMES) continue
       const team = h.at(-1).team
       const teamGames = sched.get(team) || []
       const mine = new Set(h.map((r) => r.gid))
-      const out = teamGames.length >= 3 && teamGames.slice(-3).every((g) => !mine.has(g))
-      const form = { fp_mean: m, fp_sd: sd, g: last.length, avail: Math.min(1, h.length / (teamGames.length || 1)) }
-      const proj = projectPlayer({ form, status: out ? 'out' : 'ok', current: true })
+      const missed3 = teamGames.slice(-3).filter((g) => !mine.has(g)).length
+      let gap = 0 // team games in a row he has missed
+      while (gap < teamGames.length && !mine.has(teamGames[teamGames.length - 1 - gap])) gap++
+      const out = teamGames.length >= 3 && missed3 === 3
+      const status = out ? 'out' : 'ok'
+      const form = { ...formFrom([...h].reverse()), avail: Math.min(1, h.length / (teamGames.length || 1)), missed3, gap }
+      const proj = projectPlayer({ form, status, current: true })
       const slate = games.get(team) || []
-      const position = pos[pid] ? [AS_ESPN[pos[pid]]] : []
-      pool.push({
-        id: pid, ...proj, games: slate.length,
-        dates: slate.map((g) => g.date),
-        adj: dvp ? slate.map((g) => opponentFactor(dvp, g.opp, position)) : null,
+      // The team's calendar as a manager sees it on Monday: its last game before, then the week.
+      const cal = [{ d: lastDate.get(team) }, ...slate.map((g) => ({ d: g.date }))]
+      const priced = priceGames({
+        games: slate.map((g) => ({ d: g.date, opp: g.opp, b2b: isB2B(cal, g.date) })),
+        today: monday, status, form, formFresh: true, reported: false, dvp,
+        pos: pos[pid] ? [AS_ESPN[pos[pid]]] : [],
       })
+      // Drafts, the pool cut and nightly lineups stay on the old last-25 mean, so the rosters
+      // and results are the ones graded before engine v2 and only the pricing differs.
+      pool.push({ id: pid, ...proj, ...priced, draftMean: +form.fp_mean.toFixed(2), games: slate.length })
     }
-    pool.sort((a, b) => b.mean - a.mean)
+    pool.sort((a, b) => b.draftMean - a.draftMean)
     const size = teams * roster
     if (pool.length < size) continue
     const top = pool.slice(0, size + 30)
@@ -173,7 +207,7 @@ export function replay(logs, { pos = {}, leagues = 40, teams = 10, roster = 13, 
       for (const p of side) {
         for (const [d, fp] of scored.get(p.id) || []) {
           if (!nights.has(d)) nights.set(d, [])
-          nights.get(d).push({ fp, mean: p.mean })
+          nights.get(d).push({ fp, mean: p.draftMean })
         }
       }
       for (const slate of nights.values()) {
@@ -187,7 +221,7 @@ export function replay(logs, { pos = {}, leagues = 40, teams = 10, roster = 13, 
       const r = rng(seed * 1e6 + w * 1000 + l)
       // A draft is the consensus with opinions in it: ranked by form, with enough noise
       // that no two leagues come out the same.
-      const order = top.map((p) => ({ p, s: p.mean * Math.exp(0.15 * gauss(r)) }))
+      const order = top.map((p) => ({ p, s: p.draftMean * Math.exp(0.15 * gauss(r)) }))
         .sort((a, b) => b.s - a.s).slice(0, size)
       const sides = Array.from({ length: teams }, () => [])
       order.forEach(({ p }, i) => {
@@ -279,6 +313,8 @@ async function main() {
     note: 'Last season replayed week by week through predict.js, knowing only the games before each Monday. Form only: no ESPN projection, no injury report beyond three straight missed games, best ten each night with no position slots.',
     ...summarise(withDvp, withoutDvp, withoutLevel),
   }
+  // Engine v2 measured 0.1766 on these held-out weeks; today's engine was 0.1911.
+  if (season === '2025-26') assert.ok(out.holdout.brierRaw < 0.18, `held-out brier ${out.holdout.brierRaw}`)
   writeFileSync(join(HERE, '..', 'public', 'data', 'backtest.json'), JSON.stringify(out))
   const p = out.points
   console.log(`  ${season}: ${out.graded} matchups over ${out.holdout.fitWeeks + out.holdout.testWeeks} weeks in ${((Date.now() - t0) / 1000).toFixed(1)}s`)

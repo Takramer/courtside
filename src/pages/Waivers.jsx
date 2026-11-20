@@ -1,108 +1,97 @@
 import React, { useState } from 'react'
-import { etToday, gamesBetween, weekBounds } from '../lib/model.js'
-import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt, heat } from '../components.jsx'
+import { etToday, weekBounds } from '../lib/model.js'
+import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt, heat, sfmt } from '../components.jsx'
 import { WeekHead, WeekStrip } from '../charts.jsx'
-import './season.css'
+import { priceSide } from './today.js'
 
-const SORTS = [
-  ['val', 'Best overall', 'Highest value for the rest of the season. Use for permanent pickups.'],
-  ['week', 'Best this week', 'Value times games left this week. Use for short-term pickups.'],
-  ['form', 'Hottest', 'Playing furthest above his usual level over the last 15 days.'],
-  ['trend', 'Most added', 'Rising fastest in ESPN ownership: other managers are grabbing him.'],
-]
-const POS = [['All', 'All'], ['PG', 'Point guard'], ['SG', 'Shooting guard'], ['SF', 'Small forward'], ['PF', 'Power forward'], ['C', 'Center']]
+const SORTS = [['val', 'Season'], ['week', 'This week'], ['form', 'Hot'], ['trend', 'Most added']]
+const POS = ['All', 'PG', 'SG', 'SF', 'PF', 'C']
 
 export default function Waivers({ ctx }) {
   const { players, values, settings, teams } = ctx
   const [sort, setSort] = useState('val')
   const [pos, setPos] = useState('All')
+  const [more, setMore] = useState(false)
   const today = etToday()
-  const [mon, b] = weekBounds(today)
-  const games = (p) => gamesBetween(teams[p.team], today, b).length
+  const [mon, sun] = weekBounds(today)
+  const all = players.filter((p) => ctx.isFree(p) && ctx.status(p) !== 'out' && (pos === 'All' || p.pos.includes(pos)))
+  // "This week" is the engine's expected points over the games left, priced as on Today, so the
+  // two pages rank a pickup the same way.
+  const weekPts = sort === 'week'
+    ? new Map(priceSide(ctx, { players: all }, today, sun, ctx.formCurrent, Date.now()).players
+      .map((p) => [p.id, p.dates.reduce((n, _, i) => n + (p.play?.[i] ?? p.pPlay) * p.mean * (p.adj?.[i] ?? 1), 0)]))
+    : null
   const key = {
     val: (p) => values.get(p.id)?.val ?? -99,
-    week: (p) => (values.get(p.id)?.val ?? -99) * games(p) + games(p) * 0.01,
+    week: (p) => weekPts.get(p.id) ?? -99,
     form: (p) => values.get(p.id)?.trend ?? -99,
     trend: (p) => p.ownChg,
   }[sort]
-  const all = players.filter((p) => ctx.isFree(p) && ctx.status(p) !== 'out' && (pos === 'All' || p.pos.includes(pos)))
-  const list = all.sort((x, y) => key(y) - key(x)).slice(0, 60)
+  const ranked = all.sort((x, y) => key(y) - key(x)).slice(0, 60)
+  // Twenty-five rows answer the question; the rest wait behind one button.
+  const list = more ? ranked : ranked.slice(0, 25)
   const maxVal = Math.max(1, ...list.map((p) => values.get(p.id)?.val ?? 0))
-  // Who you would drop to make room — a man on IR is not holding a spot, so he is never the answer.
-  const worstMine = ctx.activePlayers[ctx.activePlayers.length - 1]
-  const worstVal = worstMine ? values.get(worstMine.id)?.val ?? 0 : null
+  // Who you would drop: a man on IR holds no spot, so he is never the answer.
+  const worst = ctx.activePlayers[ctx.activePlayers.length - 1]
+  const worstVal = worst ? values.get(worst.id)?.val ?? 0 : null
   const cats = catHeaders(settings)
-  const short = worstMine?.name.split(' ').slice(-1)[0]
+  const pts = settings.format === 'points'
   let ups = 0
 
   return (
-    <div className="page season waiverpage">
+    <div className="page waiverpage">
       <div className="pagehead">
-        <div>
-          <h1>Waiver wire</h1>
-          <p className="lead">Players nobody in your league owns. Adding the right one each week is the biggest edge most managers ignore.
-            {ctx.linked
-              ? <> These are the players ESPN itself lists as free in your league, read at {new Date(ctx.league.at).toLocaleTimeString()}.</>
-              : !ctx.exactTaken && <> This list cannot see your league's other nine rosters, so anyone owned in more than {settings.ownCutoff}% of ESPN leagues is hidden as "probably taken". Connect your league on <a href="#league">League setup</a> to read the real thing.</>}</p>
-        </div>
+        <h1>Waivers</h1>
+        <span className="muted">
+          {ctx.linked ? `ESPN free agents, ${new Date(ctx.league.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+            : !ctx.exactTaken && <Tip text={`Not connected: anyone on more than ${settings.ownCutoff}% of ESPN teams is hidden`}>Estimated</Tip>}
+        </span>
       </div>
 
-      {worstMine
-        ? <div className="dropnote">
-          <span className="lbl">Your weakest player</span>
-          <span><PlayerName ctx={ctx} p={worstMine} /> <span className="muted">value {fmt(worstVal)}</span></span>
-          <p>Rows marked <span className="tag good">upgrade</span> are clearly better than him. To swap: add the new player and drop {short} in your league app, then
-            <span className="wide-only"> tap "I added him" here.</span>
-            <span className="phone-only"> tap his name here and pick "On my team".</span></p>
-        </div>
-        : <p className="banner warn">Add your team on <a href="#team">My team</a> first so this page can mark which free agents are upgrades.</p>}
+      {worst && <p className="weakest">Your weakest: <PlayerName ctx={ctx} p={worst} sub={false} /> <span className="num">{fmt(worstVal)}</span></p>}
 
       <div className="filters">
-        <div className="fgroup"><span className="flabel">Sort by</span>
-          <div className="seg" role="group" aria-label="Sort by">{SORTS.map(([k, label]) => <button key={k} aria-pressed={sort === k} className={sort === k ? 'on' : ''} onClick={() => setSort(k)}>{label}</button>)}</div>
-        </div>
-        <div className="fgroup"><span className="flabel">Position</span>
-          <div className="seg" role="group" aria-label="Position">{POS.map(([x, name]) => <button key={x} title={name} aria-pressed={pos === x} className={pos === x ? 'on' : ''} onClick={() => setPos(x)}>{x}</button>)}</div>
-        </div>
+        <div className="seg" role="group" aria-label="Sort by">{SORTS.map(([k, label]) => <button key={k} aria-pressed={sort === k} className={sort === k ? 'on' : ''} onClick={() => setSort(k)}>{label}</button>)}</div>
+        <div className="seg" role="group" aria-label="Position">{POS.map((x) => <button key={x} aria-pressed={pos === x} className={pos === x ? 'on' : ''} onClick={() => setPos(x)}>{x}</button>)}</div>
       </div>
-      <p className="hint">{SORTS.find((s) => s[0] === sort)[2]} {list.length > 0 && <span className="muted">Showing {list.length} of {all.length} available{pos !== 'All' && ` at ${POS.find((x) => x[0] === pos)[1].toLowerCase()}`}.</span>}</p>
 
       {list.length === 0 ? (
         <div className="emptystate">
-          <b>No available {pos === 'All' ? 'players' : POS.find((x) => x[0] === pos)[1].toLowerCase() + 's'} right now.</b>
-          <p>{pos !== 'All' ? 'Try all positions: a good player at any spot can go in a utility (UT) slot.'
-            : ctx.linked ? 'Everyone ESPN lists as free in your league is either hurt or already on your roster.'
-            : `Everyone healthy is owned or hidden as "probably taken" (on more than ${settings.ownCutoff}% of ESPN teams). Raise that cutoff on League setup to see more.`}</p>
-          {pos !== 'All' && <div className="row"><button className="btn ghost" onClick={() => setPos('All')}>Show all positions</button></div>}
+          <b>No healthy free agents{pos !== 'All' && ` at ${pos}`}.</b>
+          {pos !== 'All' && <div className="row"><button className="btn ghost" onClick={() => setPos('All')}>All positions</button></div>}
         </div>
       ) : (
-        <div className="scroll">
-          <table className="t wire">
-            <thead><tr><th className="stick">Player</th><th><Tip text="This week, Monday to Sunday: a filled cell is a game, the outlined one is today, the number is games left. For a one-week pickup, look for filled cells on the nights your roster is thin."><WeekHead mon={mon} today={today} /></Tip></th><th className="num"><ValueTip settings={settings} /></th>
-              <th className="num opt"><Tip text="Last 15 days minus his usual level. Positive = playing better than expected.">Form</Tip></th>
-              <th className="num"><Tip text="% of ESPN leagues where he is rostered, and the change today.">Owned</Tip></th>
-              {settings.format === 'cats' ? cats.map((c) => <th key={c.k} className="num" title={c.name}>{c.label}</th>) : <th className="num"><Tip text="Fantasy points per game, projected.">FPTS/G</Tip></th>}<th className="actions" /></tr></thead>
-            <tbody>
-              {list.map((p) => {
-                const v = values.get(p.id)
-                const upgrade = worstVal != null && v && v.val - worstVal > (settings.format === 'points' ? 2 : 0.6)
-                const loud = upgrade && ++ups <= 3 // only the first three upgrades get the orange button, so the eye lands there
-                return (
-                  <tr key={p.id} className={upgrade ? 'upgrade' : ''}>
-                    <td className="stick"><PlayerName ctx={ctx} p={p} />{upgrade && <Tip text={`Clearly more valuable than ${worstMine.name}. Worth the swap.`}><span className="tag good">upgrade</span></Tip>}</td>
-                    <td><WeekStrip team={teams[p.team]} teams={teams} mon={mon} today={today} /></td>
-                    <td className="heat"><i style={heat(v?.val, maxVal)} /><span>{fmt(v?.val)}</span></td>
-                    <td className="num opt">{v?.trend ? fmt(v.trend) : '–'}</td>
-                    <td className="num">{fmt(p.own, 0)}% <small className={p.ownChg > 0 ? 'up' : p.ownChg < 0 ? 'down' : ''}>{p.ownChg > 0 ? '+' : ''}{fmt(p.ownChg)}</small></td>
-                    {settings.format === 'cats' ? cats.map((c) => <ZCell key={c.k} z={v?.z[c.k]} />) : <td className="num">{fmt(v?.fp)}</td>}
-                    <td className="actions"><button className={`btn sm ${loud ? '' : 'ghost'}`} onClick={() => ctx.moveTo(p.id, 'mine')}>I added him</button></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <table className="t fold wire">
+          <thead><tr>
+            <th className="player">Player</th>
+            <th className="week"><WeekHead mon={mon} today={today} /></th>
+            <th className="num val"><ValueTip settings={settings} /></th>
+            {pts ? <th className="num fp">Pts/g</th> : cats.map((c) => <th key={c.k} className="num opt" title={c.name}>{c.label}</th>)}
+            <th className="num opt"><Tip text="Last 15 days against his usual level">Form</Tip></th>
+            <th className="num opt"><Tip text="Share of ESPN teams, change today">Owned</Tip></th>
+            <th className="actions"><span className="sr">Add</span></th>
+          </tr></thead>
+          <tbody>
+            {list.map((p) => {
+              const v = values.get(p.id)
+              const upgrade = worstVal != null && v && v.val - worstVal > (pts ? 2 : 0.6)
+              const loud = upgrade && ++ups <= 3
+              return (
+                <tr key={p.id} className={upgrade ? 'upgrade' : ''}>
+                  <td className="player"><PlayerName ctx={ctx} p={p} />{upgrade && <span className="tag good">Upgrade</span>}</td>
+                  <td className="week"><WeekStrip team={teams[p.team]} teams={teams} mon={mon} today={today} /></td>
+                  <td className="heat val"><i style={heat(v?.val, maxVal)} /><span>{fmt(v?.val)}</span></td>
+                  {pts ? <td className="num fp">{fmt(v?.fp)}</td> : cats.map((c) => <ZCell key={c.k} z={v?.z[c.k]} />)}
+                  <td className="num opt">{v?.trend ? sfmt(v.trend) : '–'}</td>
+                  <td className="num opt">{fmt(p.own, 0)}% <span className="muted">{sfmt(p.ownChg)}</span></td>
+                  <td className="actions"><button className={`btn sm ${loud ? '' : 'ghost'}`} onClick={() => ctx.moveTo(p.id, 'mine')} aria-label={`I added ${p.name}`}>I added him</button></td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       )}
+      {!more && ranked.length > list.length && <div className="more"><button className="btn ghost" onClick={() => setMore(true)}>Show {ranked.length - list.length} more</button></div>}
     </div>
   )
 }

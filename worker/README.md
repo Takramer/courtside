@@ -18,7 +18,7 @@ run on their own too:
 
 | Job | Writes | What it is |
 |---|---|---|
-| `logs` | `courtside.db` | every player game log, both seasons |
+| `logs` | `courtside.db` | every player game log, both seasons; ESPN box scores when NBA hangs |
 | `form` | nothing | mean, spread and availability per player, printed |
 | `export` | `../public/data/form.json` | the same, for the site |
 | `dvp` | `../public/data/dvp.json` | fantasy points per 36 allowed, by team and position |
@@ -38,6 +38,33 @@ python ingest.py pbp && python ingest.py friction
 `npm run backtest`, from the repo root, replays last season through the site's own engine
 and writes `../public/data/backtest.json` for the Scorecard. It reads `courtside.db`, so run
 `logs` first. About a second. Run it again after any change to `src/lib/predict.js`.
+
+### When stats.nba.com does not answer
+
+`logs` gives `playergamelogs` one try with a 15-second timeout. If it hangs, this season
+comes from ESPN's public box scores instead: one `scoreboard?dates=YYYYMMDD` call per date
+from opening night (2026-10-20), then one `summary?event=<id>` per finished game. No key, no
+cookies. Calls go one at a time with a short pause, and every final box score is cached in
+the `espn_cache` table of `courtside.db`, so a re-run only fetches new nights. The first
+back-fill (222 games) took three minutes; a nightly run is a few seconds.
+
+ESPN rows go into the same `player_games` table. A player is joined to his NBA id by
+normalised name; a man the db has never seen (a rookie, or a veteran who sat out last
+season) is stored under his ESPN athlete id, negated. ESPN game ids do not start with `00`,
+and a later successful NBA pull replaces them. Last season stays as stored.
+
+Checked 2026-11-19: one 2025-26 game read both ways gave the same fantasy points for every
+player (508 = 508) and minutes within rounding (481 against 480).
+
+Because ESPN hosts are allowed in the `courtside` cloud environment and NBA's are not, the
+twice-daily cloud session can now run `python3 ingest.py logs && python3 ingest.py export`
+itself and keep `form.json` fresh without the Mac. `courtside.db` is gitignored, so a cloud
+run starts empty: it back-fills the season (about three minutes, `pip install requests`
+first if the image lacks it) and stores everyone under ESPN ids, which `form.json` does not
+care about. Not yet tried from the cloud.
+
+`python ingest.py --selfcheck` runs the asserts on the pure parts (minutes-first projection,
+the teammate-minutes walk, missed games), no network.
 
 `python ingest.py --check` answers one question: can this machine reach `stats.nba.com`? NBA
 blocks most datacenter IPs; a residential connection is fine.

@@ -1,5 +1,6 @@
 // Self-check for the fantasy math. Run: npm run check
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { bestLineup, snakePicks, computeValues, evaluateTrade, weekBounds, tagNews, normName, blendLine, DEFAULT_SETTINGS,
   likelyGone, positionOutlook, draftSuggestions, positionRun, splitIR } from './model.js'
 
@@ -213,6 +214,43 @@ const vsWas = P.weekOutlook(player([1.11, 1.11]), player(null))
 assert.ok(Math.abs(vsWas.matchupEdge - 8.8) < 0.05, `edge is real points: ${vsWas.matchupEdge}`)
 assert.equal(P.weekOutlook(player(null), player(null)).matchupEdge, null, 'no table, no claim')
 
+// ---------- engine v2: the chance he plays, per game ----------
+// Healthy and always available: 0.939 tonight. Ruled out tonight by the report: 0. Out for
+// three straight games, four days ahead: the comeback curve says 0.261.
+assert.ok(Math.abs(P.playChance({}) - 0.939) < 0.001)
+assert.equal(P.playChance({ status: 'out', daysAhead: 0 }), 0)
+assert.ok(Math.abs(P.playChance({ status: 'out', gap: 3, daysAhead: 4 }) - 0.261) < 0.001)
+assert.equal(P.playChance({ status: 'out', gap: 3, daysAhead: 4, longOut: true }), 0)
+assert.ok(P.playChance({ status: 'dtd' }) <= 0.5, 'a game-time decision is at best a coin flip tonight')
+// teamWeek reads the per-game chance over the week's one number.
+const back = P.teamWeek([{ id: 1, mean: 40, sd: 10, pPlay: 0, dates: ['a', 'b'], play: [0.3, 0.4] }], { starts: 10 })
+assert.ok(Math.abs(back.mu - 28) < 1e-9) // 40 x (0.3 + 0.4)
+assert.deepEqual(P.nightlyLoad([{ pPlay: 0.9, dates: ['a', 'b'], play: [0.4, 0.9] }], ['a', 'b']), [0, 1])
+// An older form.json (no missed3, no fp_proj) prices exactly as before.
+assert.equal(P.projectPlayer({ espnFp: 40, form: { fp_mean: 40, fp_sd: 9, avail: 1 } }).pPlay, 0.92)
+assert.equal(P.projectPlayer({ form: { fp_mean: 40, fp_proj: 30, fp_sd: 9, g: 20 }, current: true }).mean, 30)
+assert.equal(P.projectPlayer({ form: { fp_mean: 40, fp_sd: 9, avail: 1, missed3: 0, gap: 0 } }).pPlay, 0.939)
+// Back-to-back and return discount ride on adj; with no defence table they are the whole of it.
+const pg = P.priceGames({ games: [{ d: '2026-11-20', opp: 'BOS', b2b: true }], today: '2026-11-20' })
+assert.equal(pg.adj[0], 0.972)
+const ret = P.priceGames({ games: [{ d: '2026-11-22', opp: 'BOS', b2b: false }], today: '2026-11-20', status: 'out' })
+assert.equal(ret.adj[0], 0.851)
+assert.ok(ret.play[0] > 0 && ret.play[0] < 0.3, 'out today, a small chance by Sunday')
+assert.ok(P.isB2B([{ d: '2026-11-19' }], '2026-11-20') && !P.isB2B([{ d: '2026-11-18' }], '2026-11-20'))
+// A stale form.json does not get to say he missed two of his last three.
+const stale = P.priceGames({ games: [{ d: '2026-11-20' }], today: '2026-11-20', form: { missed3: 2, gap: 0, avail: 1 }, formFresh: false })
+assert.ok(Math.abs(stale.play[0] - 0.939) < 0.001)
+// Teammates out tonight free minutes: a 34-minute starter missing is +3.5%, capped at 15%.
+assert.ok(Math.abs(P.mateFactor(34, 0) - 1.0347) < 1e-4)
+assert.equal(P.mateFactor(400, 0), 1.15)
+assert.equal(P.mateFactor(34, undefined), 1) // old form.json: no miss_avg, no effect
+const rows = [{ team: 'DEN', gap: 0, min_recent: 34, missed3: 0, avail: 1 }, { team: 'DEN', gap: 20, min_recent: 30 }, { team: 'BOS', gap: 0, min_recent: 30 }]
+assert.equal(P.mateNow('DEN', rows, () => 'out'), 34, 'ruled out tonight, all his minutes; long gone, none')
+// Long-term: injured reserve, or a report that reads like weeks.
+assert.equal(P.availability({ inj: 'INJURY_RESERVE' }).longOut, true)
+assert.equal(P.availability({ report: { status: 'Out', comment: 'Will be reevaluated in six weeks' } }).longOut, true)
+assert.equal(P.availability({ report: { status: 'Out', comment: 'Rest' } }).longOut, false)
+
 console.log('predict checks pass')
 
 // ---------- phase 6: who guards him, and who he has history with ----------
@@ -413,6 +451,8 @@ assert.equal(G.spreadScale(), 1)
 assert.equal(G.spreadScale({ replay: { z2: 2.25 } }), 1.5)
 assert.ok(Math.abs(G.spreadScale({ replay: { z2: 2.25 }, ledger: { n: 4000, z2: 1 } }) - 1) < 0.01)
 assert.equal(G.spreadScale({ replay: { z2: 9 } }), 1.6)
+// It widens and never narrows: a quiet first half is not evidence the second will be.
+assert.equal(G.spreadScale({ replay: { z2: 0.8 } }), 1)
 
 console.log('grading checks pass')
 
@@ -450,5 +490,9 @@ for (const [k, e] of Object.entries(plain)) {
 // The defence table is rebuilt from the games before Monday, with cameos left out.
 const cameo = B.dvpFrom([{ pid: 1, opp: 'BBB', min: 4, fp: 90 }], { 1: 'G' })
 assert.deepEqual(cameo.teams, {})
+// Minutes first: recent minutes move the projection, the slow scoring rate does not chase.
+const g8 = [30, 30, 30, 30, 20, 20, 20, 20].map((min) => ({ min, fp: min })) // newest first
+assert.ok(Math.abs(B.formFrom(g8).fp_proj - 28.32) < 0.01) // plain average is 25
 console.log('replay checks pass')
 
+if (existsSync(new URL('./decide.check.js', import.meta.url))) await import('./decide.check.js')

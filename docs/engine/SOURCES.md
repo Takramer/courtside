@@ -43,6 +43,24 @@ is fine, because `requests` carries certifi. Use `requests`.
 Fallbacks, if NBA ever locks the door: a residential proxy (costs money), or scraping
 [Basketball-Reference](https://www.basketball-reference.com) (no API, strict terms, last resort).
 
+## ESPN box scores — the fallback for game logs
+
+**Added 2026-11-19.** `stats.nba.com/stats/playergamelogs` timed out 8 times and
+`commonallplayers` once from this Mac on 2026-11-19, so `form.json` had not moved since
+19 October. ESPN's public site API answered every call:
+
+| Call | Gives |
+|---|---|
+| `site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=YYYYMMDD` | the day's games (US Eastern date), ids, status |
+| `.../summary?event=<id>` | box score: MIN, PTS, FG "5-11", 3PT, FT, REB, AST, TO, STL, BLK, `starter`, `didNotPlay`, position |
+
+No key, no cookies, not the fantasy host. `worker/ingest.py` `job_logs_espn` reads it when
+the NBA call fails, caches final box scores in `courtside.db`, and translates ESPN's six odd
+abbreviations (GS, NO, NY, SA, UTAH, WSH) to the NBA's. **Verified:** a 2025-26 game read
+from both sources gave identical fantasy points for every player. ESPN has no defender vs
+scorer, play-by-play friction or `playerindex`, so `matchups`, `pbp` and fresh positions
+still need stats.nba.com.
+
 ## Free, keyless, verified reachable
 
 | Source | Limit | Gives |

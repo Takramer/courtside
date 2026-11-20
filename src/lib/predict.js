@@ -20,7 +20,7 @@
 // The error is small next to the spread of the players themselves, and it makes the result
 // slightly overconfident in the tails. Phase 8 grades this against what actually happens.
 
-import { normName } from './model.js'
+import { normName, tagNews } from './model.js'
 
 // Abramowitz & Stegun 7.1.26. Accurate to about 1.5e-7, which is far past what this needs.
 export function normalCdf(z) {
@@ -70,7 +70,10 @@ export function marginQuantiles(me, opp, n = 20, scale = 1) {
  * score nothing. Counts a man only when he is more likely than not to play.
  */
 export function nightlyLoad(players, dates) {
-  return dates.map((d) => players.filter((p) => p.pPlay > 0.5 && (p.dates || []).includes(d)).length)
+  return dates.map((d) => players.filter((p) => {
+    const i = (p.dates || []).indexOf(d)
+    return i >= 0 && (p.play?.[i] ?? p.pPlay) > 0.5
+  }).length)
 }
 
 // How much of this season's own games to trust over the prior. Mirrors blendLine in model.js:
@@ -91,26 +94,133 @@ const AVAIL_PULL = 0.3
 /**
  * One player's expected night: what he scores, how much that swings, and whether he suits up.
  *
- * espnFp  fantasy points per game from the app's own blend of ESPN projection and this season
- * form    his row from public/data/form.json, or undefined if the worker has not seen him
- * status  'ok' | 'dtd' | 'out' from the live injury report, which outranks any history
- * current whether form.json is this season (trust it by games played) or last (a prior)
+ * espnFp    fantasy points per game from the app's own blend of ESPN projection and this season
+ * form      his row from public/data/form.json, or undefined if the worker has not seen him
+ * status    'ok' | 'dtd' | 'out' from the live injury report, which outranks any history
+ * current   whether form.json is this season (trust it by games played) or last (a prior)
+ * formFresh false when form.json is days old: its recent misses are then not read
+ *
+ * Form is minutes first when the worker wrote `fp_proj` (change 2 of engine v2), the plain
+ * last-25 average when it did not. pPlay is playChance for tonight once form carries
+ * `missed3`; an older form.json keeps the old availability prior, so nothing moves until the
+ * worker has run.
  */
-export function projectPlayer({ espnFp, form, status = 'ok', current = false }) {
-  const base = espnFp ?? form?.fp_mean ?? 0
+export function projectPlayer({ espnFp, form, status = 'ok', current = false, formFresh = true }) {
+  const fp = form?.fp_proj ?? form?.fp_mean
+  const base = espnFp ?? fp ?? 0
   let mean = base
-  if (form?.fp_mean != null) {
+  if (fp != null) {
     const w = current ? formWeight(form.g ?? 0) : PRIOR_WEIGHT
-    mean = base * (1 - w) + form.fp_mean * w
+    mean = base * (1 - w) + fp * w
   }
   const sd = form?.fp_sd ?? Math.abs(mean) * SD_IF_UNKNOWN
   // Out is out. Day-to-day is a coin flip, which is the honest reading of "game-time decision".
   // Otherwise fall back on how often he has actually been available.
-  const pPlay = status === 'out' ? 0
-    : status === 'dtd' ? 0.5
-      : form?.avail != null ? +(AVAIL_PRIOR - AVAIL_PULL * (1 - form.avail)).toFixed(3)
-        : AVAIL_PRIOR
+  const pPlay = form?.missed3 != null ? playChance({ status, avail: form.avail ?? 1,
+    missed3: formFresh ? form.missed3 : 0, gap: formFresh ? form.gap ?? 0 : 0 })
+    : status === 'out' ? 0
+      : status === 'dtd' ? 0.5
+        : form?.avail != null ? +(AVAIL_PRIOR - AVAIL_PULL * (1 - form.avail)).toFixed(3)
+          : AVAIL_PRIOR
   return { mean: +mean.toFixed(2), sd: +sd.toFixed(2), pPlay: +pPlay.toFixed(3) }
+}
+
+// ---------------------------------------------------------------- engine v2: per game
+
+// Whether he plays, one game at a time. One number for the week was wrong three ways in the
+// replay of 2025-26: men flagged out on Monday played 18.6% of that week's games (priced 0%),
+// healthy men who had just missed games played 69-76% (priced about 90%), and the chance
+// falls through the week and on the second night of a back-to-back.
+// Fitted on weeks 3-13 of 2025-26 (worker/experiments/01-player.mjs), checked on 14-24.
+// [1, missed 1 of last 3, missed 2 of last 3, 1 - avail, days ahead, back-to-back]
+export const PLAY_OK = [2.729, -0.992, -1.279, -1.203, -0.074, -0.383]
+// [1, days ahead, ln(team games missed in a row)]
+export const PLAY_OUT = [-1.795, 0.288, -0.363]
+
+/**
+ * The chance he plays one game.
+ *
+ * `reported` says the status came from the injury report. Then "out" today means out
+ * tonight. The replay has no report and guesses "out" from three straight misses, so there
+ * the comeback curve also applies today. `longOut` (injured reserve, surgery, weeks) is 0.
+ */
+export function playChance({ status = 'ok', missed3 = 0, gap = 0, avail = 1,
+  daysAhead = 0, b2b = false, longOut = false, reported = true } = {}) {
+  const s = (x) => 1 / (1 + Math.exp(-x))
+  if (status === 'out') {
+    if (longOut) return 0
+    if (reported && daysAhead <= 0) return 0 // the report says tonight is off
+    return s(PLAY_OUT[0] + PLAY_OUT[1] * daysAhead + PLAY_OUT[2] * Math.log(Math.max(3, gap)))
+  }
+  // Day-to-day is read as having just missed a game, and tonight it is at best a coin flip.
+  const m = status === 'dtd' ? Math.max(1, missed3) : missed3
+  const p = s(PLAY_OK[0] + PLAY_OK[1] * (m === 1) + PLAY_OK[2] * (m >= 2)
+    + PLAY_OK[3] * (1 - avail) + PLAY_OK[4] * daysAhead + PLAY_OK[5] * (b2b ? 1 : 0))
+  return status === 'dtd' && daysAhead <= 0 ? Math.min(0.5, p) : p
+}
+
+// Men back from a lay-off play fewer minutes at first: flagged out on Monday, those who did
+// play scored 0.851 of the rest's ratio to projection (FIT, 100 games; TEST 0.857). Costs
+// 0.0005 of held-out Brier and makes the points right, which the decision layer ranks by.
+export const RETURN_FACTOR = 0.851
+// Second night of a back-to-back: 0.972 of other nights' points (FIT, 602 games).
+export const B2B_FACTOR = 0.972
+
+const dayDiff = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 864e5)
+const dayBefore = (d) => new Date(Date.parse(d) - 864e5).toISOString().slice(0, 10)
+
+/** True when the team (ctx.teams[team].games, each with `d`) played the day before `d`. */
+export const isB2B = (teamGames, d) => (teamGames || []).some((g) => g.d === dayBefore(d))
+
+/**
+ * Teammates out tonight free minutes for him: 0.00102 of his night per minute missing beyond
+ * what his team usually misses (FIT, 3,674 player-games). Only with tonight's real absences,
+ * from the report; known on Monday the slope is ten times smaller, so it is not used ahead.
+ */
+// A missing usual (old form.json) prices as no effect, never NaN.
+export const mateFactor = (now, usual) => (now == null || usual == null ? 1 : 1 + Math.min(0.15, Math.max(-0.15, 0.00102 * (now - usual))))
+
+/**
+ * Rotation minutes `team` is missing tonight: each teammate seen in the last 10 team games,
+ * his recent minutes times his chance of sitting. `statusOf(row)` gives 'ok' | 'dtd' | 'out'
+ * from the live report. `skip` leaves out the man being priced. Rows without `min_recent`
+ * count nothing, so an older form.json gives 0.
+ */
+export function mateNow(team, formRows = [], statusOf = () => 'ok', skip = null) {
+  let now = 0
+  for (const r of formRows) {
+    if (r.team !== team || r === skip || !(r.gap <= 10) || r.min_recent == null) continue
+    now += r.min_recent * (1 - playChance({ status: statusOf(r), missed3: r.missed3 ?? 0, gap: r.gap, avail: r.avail ?? 1 }))
+  }
+  return now
+}
+
+/**
+ * Per-game numbers for one player.
+ * games    [{ d: 'YYYY-MM-DD', opp: ESPN abbrev, b2b: boolean }], date order
+ * mate     { now, usual } for change 5, or null; applied to tonight and tomorrow only
+ * returns  { dates, adj, play }, parallel arrays for teamWeek
+ *
+ * A stale form.json (`formFresh` false) has its recent misses read as 0: a "missed 2 of his
+ * last 3" from weeks ago is worse than no reading.
+ */
+export function priceGames({ games = [], today, status = 'ok', longOut = false,
+  form, formFresh = true, dvp = null, pos = [], mate = null, reported = true }) {
+  const missed3 = formFresh ? form?.missed3 ?? 0 : 0
+  const gap = formFresh ? form?.gap ?? 0 : 0
+  const avail = form?.avail ?? 1
+  const mf = mate ? mateFactor(mate.now, mate.usual) : 1
+  const dates = []
+  const adj = []
+  const play = []
+  for (const g of games) {
+    const daysAhead = dayDiff(g.d, today)
+    dates.push(g.d)
+    play.push(playChance({ status, longOut, reported, b2b: !!g.b2b, daysAhead, avail, missed3, gap }))
+    adj.push(opponentFactor(dvp, g.opp, pos) * (g.b2b ? B2B_FACTOR : 1)
+      * (status === 'out' ? RETURN_FACTOR : 1) * (daysAhead <= 1 ? mf : 1))
+  }
+  return { dates, adj, play }
 }
 
 // The mixture described at the top: plays and scores, or does not play and scores nothing.
@@ -156,7 +266,8 @@ export function opponentFactor(dvp, oppAbbrev, positions = []) {
  * Players are taken in order of mean, which is the lineup you would set anyway.
  *
  * Each player may carry `adj`: one multiplier per remaining game, in date order, from
- * opponentFactor above. A player facing Washington twice is worth more than the same player
+ * opponentFactor above (priceGames adds back-to-backs and returns), and `play`, the chance
+ * he plays each of those games; without `play`, `pPlay` stands for every game. A player facing Washington twice is worth more than the same player
  * facing Boston twice, and until phase 5 that difference was invisible here. No `adj` means
  * every game counts at face value, which is exactly what phases 3 and 4 did.
  *
@@ -178,10 +289,14 @@ export function opponentFactor(dvp, oppAbbrev, positions = []) {
 // the Brier score from 0.203 to 0.192. Re-run `npm run backtest` before changing it.
 const LEVEL_CV = 0.3
 const meanAdj = (p) => (p.adj?.length ? p.adj.reduce((a, b) => a + b, 0) / p.adj.length : 1)
+// The chance he plays: per game from priceGames when the player carries `play`, else his one
+// number for the week.
+const playOn = (p, i) => p.play?.[i] ?? p.pPlay
+const meanPlay = (p) => (p.play?.length ? p.play.reduce((a, b) => a + b, 0) / p.play.length : p.pPlay)
 
 export function teamWeek(players, { starts = 10, days = 7, banked = 0, levelCv = LEVEL_CV } = {}) {
   if (players.some((p) => p.dates?.length)) return nightly(players, starts, banked, levelCv)
-  const ranked = [...players].sort((a, b) => b.mean * b.pPlay * meanAdj(b) - a.mean * a.pPlay * meanAdj(a))
+  const ranked = [...players].sort((a, b) => b.mean * meanPlay(b) * meanAdj(b) - a.mean * meanPlay(a) * meanAdj(a))
   // You cannot start thirteen men in ten slots. Over the days left there are only so many
   // starts to give, and they go to your best players first — which is what you would do.
   // Without this the bench is counted as though it played, and a deep roster looks better
@@ -200,7 +315,7 @@ export function teamWeek(players, { starts = 10, days = 7, banked = 0, levelCv =
     let pvar = 0
     for (let i = 0; i < played; i++) {
       const f = p.adj?.[i] ?? 1
-      const day = playerDay({ mean: p.mean * f, sd: p.sd * f, pPlay: p.pPlay })
+      const day = playerDay({ mean: p.mean * f, sd: p.sd * f, pPlay: meanPlay(p) })
       pmu += day.mu
       pvar += day.variance
     }
@@ -225,18 +340,18 @@ function nightly(players, starts, banked, levelCv) {
   const nights = new Map()
   players.forEach((p, k) => (p.dates || []).forEach((d, i) => {
     if (!nights.has(d)) nights.set(d, [])
-    nights.get(d).push({ k, f: p.adj?.[i] ?? 1 })
+    nights.get(d).push({ k, f: p.adj?.[i] ?? 1, q: playOn(p, i) })
   }))
   const acc = players.map(() => ({ mu: 0, variance: 0, games: 0 }))
   for (const slate of nights.values()) {
-    slate.sort((a, b) => players[b.k].mean * players[b.k].pPlay * b.f - players[a.k].mean * players[a.k].pPlay * a.f)
+    slate.sort((a, b) => players[b.k].mean * b.q * b.f - players[a.k].mean * a.q * a.f)
     let room = starts
-    for (const { k, f } of slate) {
+    for (const { k, f, q } of slate) {
       const p = players[k]
       const share = Math.min(1, Math.max(0, room))
-      room -= p.pPlay
+      room -= q
       if (!share) continue
-      const day = playerDay({ mean: p.mean * f, sd: p.sd * f, pPlay: p.pPlay * share })
+      const day = playerDay({ mean: p.mean * f, sd: p.sd * f, pPlay: q * share })
       acc[k].mu += day.mu
       acc[k].variance += day.variance
       if (share >= 0.5) acc[k].games++
@@ -425,8 +540,13 @@ export function availability({ inj, report, news = [], offCourt = [], now = Date
       if (hasTag(item, k)) flags.push({ tag: k, title: item.title, date: item.date, src: item.src })
     }
   }
-  const out = (why, source) => ({ status: 'out', why, source, flags })
-  const dtd = (why, source) => ({ status: 'dtd', why, source, flags })
+  // Out for weeks, not tonight: injured reserve, or a fresh item or the report's comment that
+  // reads like surgery or "re-evaluated in". playChance prices these at 0 for the whole week.
+  const longOut = inj === 'INJURY_RESERVE'
+    || news.some((item) => fresh(item, freshHours) && hasTag(item, 'longterm'))
+    || tagNews(report?.comment || '').some((t) => t.k === 'longterm')
+  const out = (why, source) => ({ status: 'out', why, source, flags, longOut })
+  const dtd = (why, source) => ({ status: 'dtd', why, source, flags, longOut })
 
   if (HARD_OUT.includes(inj)) {
     return out(inj === 'SUSPENSION' ? 'Suspended' : inj === 'INJURY_RESERVE' ? 'On injured reserve' : 'Ruled out', 'ESPN')
@@ -449,5 +569,5 @@ export function availability({ inj, report, news = [], offCourt = [], now = Date
       return dtd(item.title, item.src || 'news')
     }
   }
-  return { status: 'ok', why: null, source: null, flags }
+  return { status: 'ok', why: null, source: null, flags, longOut }
 }

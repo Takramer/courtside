@@ -306,10 +306,47 @@ Settled 2026-10-20, phase 9:
    and still runs about 20% tight on the second: rest days, tanking and shut-downs. Worth a
    look in March, not before.
 
+Settled 2026-11-19, engine v2. Every number below is from the 2025-26 replay, fitted on
+weeks 3-13 and read once on weeks 14-24. Full write-up: `.scratch/engine-v2/spec.md`.
+
+28. **Play chance is per game, not per week.** One `pPlay` for the week was wrong three ways:
+   men ruled out on Monday played 18.6% of that week's games (priced 0%), healthy men who
+   had just missed games played 69-76% (priced about 90%), and the chance falls through the
+   week and on the second night of a back-to-back. `playChance` prices each game; `priceGames`
+   builds the `play` array that `teamWeek` reads. Held-out Brier 0.1911 to 0.1775 on its own.
+29. **Minutes first.** `fp_proj` is recent minutes (half-life 8 games) times a slow points
+   rate (half-life 40, pulled to the pool's 1.276 a minute). Small and steady: held-out Brier
+   0.1911 to 0.1894. ESPN's blend stays on top of it.
+30. **Back-to-backs and returns cost points.** Second nights score 0.972 of other nights. A man
+   ruled out who plays anyway scores 0.851 of his projection. The return factor costs 0.0005
+   of held-out Brier and is kept on purpose: the moves are ranked by points, and it makes the
+   points right.
+31. **Engine v2 together:** held-out Brier 0.1911 to 0.1766 (weeks 14-24), full season
+   0.1846 to 0.1752. Weeks called 80-90% were won 71% of the time before, 84% after. Points
+   bias got worse, -61.5 to -78.9 held out: late-season absences, not hot streaks.
+32. **The spread scale never narrows.** `spreadScale` floors at 1, not 0.8. With v2 the replay
+   asks for 0.955, and narrowing by what the first half measured made the second half worse
+   (0.1766 to 0.1775).
+33. **Decision 27 is closed.** "Late season runs 20% tight" was absences the old play chance
+   could not see, not missing spread. With play priced per game the held-out margin z2 went
+   1.248 to 0.978, with no change to the level term.
+34. **ESPN box scores are the fallback source.** `stats.nba.com` timed out from this Mac all
+   through October, and form.json sat on last season. `ingest.py` now tries the NBA once, then
+   reads ESPN's scoreboard and box scores for every date it is missing. form.json more than
+   3 days old has its recent misses ignored rather than trusted.
+35. **One decision layer.** `src/lib/decide.js` ranks moves (`rankMoves`), plans streaming
+   (`streamPlan`) and checks trades (`tradeCheck`) with the same engine that gives the odds.
+   Picked on held-out weeks, its one add a week made 96 real points against 83 for the old
+   pick, and it expected 103 where the old engine expected 115. Every page prices players
+   through `priceSide` in `src/pages/today.js`, so no two screens disagree.
+
 ### What is not yet verified
 
 The grading maths has asserts and the page was checked in a browser against a seeded
 ledger. Phase 9's banked points and nightly cap have asserts but have not run against a live
 matchup, for the same reason as below. The ESPN side — `history: true` — has not run against a real league, because that
-needs cookies that stay on Thomas's devices. The first visit to **Scorecard** with the
-league connected is the real test of it.
+needs cookies that stay on Thomas's devices. The Scorecard page is gone (2026-11); the ledger
+still records and settles in the background and feeds `spreadScale`, so the first week settled
+with the league connected is the real test of it. The same goes for `api/league.js`'s
+acquisition limit, weeks left and games limit: the field names are guesses until read against
+the real league.

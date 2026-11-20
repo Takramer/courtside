@@ -146,8 +146,12 @@ export function score(ledger, { minForProbability = 20 } = {}) {
  * Clipped, because a scale is a correction, not a rescue. If the spread were off by more
  * than this the model would be broken in a way widening cannot fix, and the scorecard is
  * where that should show.
+ *
+ * It widens and never narrows (`lo` 1). Narrowing by what the first half of 2025-26 measured
+ * made the second half worse (held-out Brier 0.1766 to 0.1775): the first half was the quiet
+ * half, and a spread tuned to calm weeks is overconfident in the rest.
  */
-export function spreadScale({ replay, ledger, weight = 40, lo = 0.8, hi = 1.6 } = {}) {
+export function spreadScale({ replay, ledger, weight = 40, lo = 1, hi = 1.6 } = {}) {
   const prior = replay?.z2 ?? 1
   const n = ledger?.n ?? 0
   const z2 = (n * (ledger?.z2 ?? 0) + weight * prior) / (n + weight)

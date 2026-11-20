@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-const IDLE = { at: null, teams: [], rosters: {}, freeIds: null, name: '', loading: false, error: null }
+const IDLE = { at: null, teams: [], rosters: {}, freeIds: null, name: '', acq: null, weeksLeft: null, gamesLimit: null, loading: false, error: null }
 
 // Reads one ESPN league through /api/league. Once per load, plus whenever you call reload().
 export function useEspnLeague(conn) {
@@ -22,7 +22,8 @@ export function useEspnLeague(conn) {
         if (!r.ok) throw new Error(j.error || `ESPN lookup failed (${r.status})`)
         return j
       })
-      .then((j) => live && setState({ at: Date.now(), teams: j.teams, rosters: j.rosters, freeIds: j.freeIds, name: j.name, loading: false, error: null }))
+      .then((j) => live && setState({ at: Date.now(), teams: j.teams, rosters: j.rosters, freeIds: j.freeIds, name: j.name,
+        acq: j.acq ?? null, weeksLeft: j.weeksLeft ?? null, gamesLimit: j.gamesLimit ?? null, loading: false, error: null }))
       // Keep the last good read on screen: a dropped call is not a reason to forget the league.
       .catch((e) => live && setState((s) => ({ ...s, loading: false, error: String(e.message || e) })))
     return () => { live = false }

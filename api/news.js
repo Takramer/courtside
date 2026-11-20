@@ -7,7 +7,7 @@ const tag = (xml, name) => decode(xml.match(new RegExp(`<${name}[^>]*>([\\s\\S]*
 
 async function rotowire() {
   const r = await fetch('https://www.rotowire.com/rss/news.php?sport=NBA')
-  if (!r.ok) return []
+  if (!r.ok) throw new Error(`${r.url} returned ${r.status}`)
   const xml = await r.text()
   return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(([, it]) => {
     const title = tag(it, 'title')
@@ -25,7 +25,7 @@ async function rotowire() {
 
 async function injuries() {
   const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries')
-  if (!r.ok) return []
+  if (!r.ok) throw new Error(`${r.url} returned ${r.status}`)
   const j = await r.json()
   return (j.injuries || []).flatMap((t) => (t.injuries || []).map((i) => ({
     name: i.athlete?.displayName || '',
@@ -38,7 +38,7 @@ async function injuries() {
 
 async function espnHeadlines() {
   const r = await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news?limit=50')
-  if (!r.ok) return []
+  if (!r.ok) throw new Error(`${r.url} returned ${r.status}`)
   const j = await r.json()
   return (j.articles || []).filter((a) => a.type !== 'Media').map((a) => ({
     ids: (a.categories || []).filter((c) => c.type === 'athlete').map((c) => c.athleteId ?? c.athlete?.id),
@@ -55,7 +55,7 @@ async function espnHeadlines() {
 async function googleNews(name, limit = 25) {
   const q = encodeURIComponent(`"${name}" NBA`)
   const r = await fetch(`https://news.google.com/rss/search?q=${q}+when:14d&hl=en-US&gl=US&ceid=US:en`)
-  if (!r.ok) return []
+  if (!r.ok) throw new Error(`${r.url} returned ${r.status}`)
   const xml = await r.text()
   return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, limit).map(([, it]) => {
     const title = tag(it, 'title')
@@ -69,11 +69,16 @@ async function googleNews(name, limit = 25) {
 // is a second or two, and a hundred would be a different thing.
 const SWEEP_MAX = 15
 
+// Any failed source: answer with what we have, but let no CDN keep it.
+const cache = (res, failed, maxAge) =>
+  res.setHeader('Cache-Control', failed ? 'no-store' : `s-maxage=${maxAge}, stale-while-revalidate=3600`)
+
 export default async function handler(req, res) {
   const player = String(req.query?.player || '').slice(0, 60)
   if (player) {
-    const items = await googleNews(player).catch(() => [])
-    res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600')
+    let failed = false
+    const items = await googleNews(player).catch(() => { failed = true; return [] })
+    cache(res, failed, 900)
     return res.status(200).json({ news: items })
   }
 
@@ -81,7 +86,7 @@ export default async function handler(req, res) {
   if (sweep.length) {
     // Ten each, not twenty-five. The sweep exists to catch an event, not to be read.
     const got = await Promise.allSettled(sweep.map((n) => googleNews(n, 10)))
-    res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600')
+    cache(res, got.some((r) => r.status === 'rejected'), 900)
     return res.status(200).json({
       updated: new Date().toISOString(),
       asked: sweep.length,
@@ -93,7 +98,7 @@ export default async function handler(req, res) {
   }
   const [rw, espn, inj] = await Promise.allSettled([rotowire(), espnHeadlines(), injuries()])
   const ok = (r) => (r.status === 'fulfilled' ? r.value : [])
-  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=3600')
+  cache(res, [rw, espn, inj].some((r) => r.status === 'rejected'), 300)
   res.status(200).json({
     updated: new Date().toISOString(),
     news: [...ok(rw), ...ok(espn)].sort((a, b) => b.date.localeCompare(a.date)),

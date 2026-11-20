@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS = {
   teams: 10,
   rosterSize: 13,
   slots: 'PG,SG,SF,PF,C,G,F,PF/C,UT,UT',
-  ir: 1, // injured-reserve spots: a ruled-out player sits here without costing a roster spot
+  ir: 3, // injured-reserve spots: a ruled-out player sits here without costing a roster spot
   draftSlot: 1,
   punt: [], // category keys to ignore
   weights: { ...DEFAULT_WEIGHTS, ftm: 2 }, // league scores +1 per made FT, -1 per miss; same as FTM 2, FTA -1
@@ -34,9 +34,9 @@ export const DEFAULT_SETTINGS = {
 // It is also the roster `npm run teamcheck` watches (the league is private, so the cloud check cannot read
 // ESPN's): keep it current after each add or drop.
 export const DEFAULT_ROSTER = [
-  'Jamal Murray', 'Austin Reaves', 'Franz Wagner', 'Jayson Tatum', 'Anthony Davis',
-  'Norman Powell', 'Michael Porter Jr.', 'Miles Bridges', 'Paul George', 'Brandon Ingram',
-  'Zach Edey', 'Cedric Coward', 'Kyshawn George',
+  'Coby White', 'Cedric Coward', 'Jayson Tatum', 'Anthony Davis', "Kel'el Ware",
+  'Norman Powell', 'Franz Wagner', 'Paul George', 'Kyshawn George', 'Michael Porter Jr.',
+  'Miles Bridges', 'Nic Claxton', 'Isaiah Hartenstein', 'Brandon Ingram', 'Austin Reaves',
 ]
 
 const KEYS = ['pts', 'reb', 'ast', 'stl', 'blk', 'tpm', 'to', 'fgm', 'fga', 'ftm', 'fta', 'min']
@@ -129,7 +129,9 @@ export function computeValues(players, settings = DEFAULT_SETTINGS) {
 
 // ---------- schedule ----------
 
-export const etToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+// Built once: constructing a formatter per call cost ~400 ms per Waivers sort.
+const ET_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' })
+export const etToday = () => ET_DATE.format(new Date())
 
 export function weekBounds(dateStr) {
   const d = new Date(dateStr + 'T12:00:00Z')
