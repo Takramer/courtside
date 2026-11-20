@@ -41,8 +41,10 @@ p { margin: 0 0 var(--s2); }
 .note { margin: var(--s2) 0 0; color: var(--muted); font-size: var(--f-base); max-width: 68ch; text-wrap: pretty; }
 .note b { color: var(--text); font-weight: 600; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.skip { position: absolute; left: var(--s2); top: -100px; z-index: 100; padding: var(--s1) var(--s2); background: var(--text); color: var(--bg); border-radius: var(--r); }
-.skip:focus { top: var(--s1); }
+/* Focused, it joins the flow above the header bar at the page column's left edge (--col, the .top padding):
+   it pushes the page down by its height and covers nothing. */
+.skip { --col: max(var(--s4), calc((100% - 1136px) / 2)); position: absolute; left: var(--col); top: -100px; z-index: 100; padding: var(--s1) var(--s2); background: var(--text); color: var(--bg); border-radius: var(--r); }
+.skip:focus { position: static; display: block; width: fit-content; margin: var(--s1) 0 var(--s1) var(--col); }
 
 /* ---------- Shell: a sticky top bar and one page ---------- */
 /* The bar's edges line up with the page column below (1200 wide, 32 in). */
@@ -128,7 +130,8 @@ td.heat > i { position: absolute; left: 0; right: 0; top: 50%; height: 32px; tra
 .pname { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0 var(--s1); }
 .pname small { color: var(--muted); font-size: var(--f-sm); white-space: nowrap; }
 button.link { padding: 0; background: none; border: 0; color: var(--text); font: inherit; font-weight: 500; text-align: left; cursor: pointer; }
-button.link:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+/* Mouse only: on touch the hover stuck after a tap (a Trade "You get" name stayed amber and underlined). */
+@media (hover: hover) { button.link:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; } }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--info); }
 .icon { display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; background: none; border: 0; border-radius: var(--r); color: var(--muted); cursor: pointer; }
 @media (hover: hover) { .icon:hover { background: rgba(239, 107, 99, 0.12); color: var(--bad); } }
@@ -140,6 +143,9 @@ button.link:hover { color: var(--accent); text-decoration: underline; text-under
 .tag { display: inline-flex; align-items: center; height: 24px; padding: 0 var(--s1); border-radius: var(--s0); background: var(--surface2); color: var(--muted); font-size: var(--f-sm); font-weight: 600; white-space: nowrap; }
 .pname + .tag, .t td .tag { margin-left: var(--s1); }
 .t td.opt > .tag:first-child { margin-left: calc(-1 * var(--s1)); }
+/* Name, team and tag share a line while they fit; when they do not, the tag drops under the name, flush left, instead of running into the next column. */
+.pline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s0) var(--s1); }
+.t td .pline > .tag { margin-left: 0; }
 .tag.good { color: var(--good); background: rgba(92, 194, 135, 0.14); }
 .tag.bad { color: var(--bad); background: rgba(239, 107, 99, 0.14); }
 .tag.warn { color: var(--warn); background: rgba(240, 152, 63, 0.14); }
@@ -170,6 +176,9 @@ input, select { height: 44px; padding: 0 var(--s2); background: var(--surface); 
 input::placeholder { color: var(--muted); }
 input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 input[type=checkbox] { width: 24px; height: 24px; accent-color: var(--accent); }
+/* A ticked box is filled with the accent, so an inset accent ring vanished on it: ring it outside, keyboard only. */
+input[type=checkbox]:focus { outline: none; }
+input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* No spinner: Chromium's appears on hover and pushes the digit 15px left. Arrow keys still step. */
 input[type=number] { font-family: var(--mono); -moz-appearance: textfield; appearance: textfield; }
 input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -215,16 +224,25 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .tradepage .side > header { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding-bottom: var(--s2); margin-bottom: var(--s1); border-bottom: 1px solid var(--line2); }
 .tradepage .side h2 { margin: 0; }
 .sidetotal b { font-family: var(--sans); font-size: var(--f-xl); font-weight: 500; font-variant-numeric: tabular-nums; }
-.swap { align-self: center; display: grid; place-items: center; height: 48px; color: var(--muted); }
+/* Centred on the header row: card padding (24) + the total's line (28px × 1.5). */
+.swap { align-self: start; display: grid; place-items: center; height: calc(var(--f-xl) * 1.5); margin-top: var(--s3); color: var(--muted); }
 .tradepage .search { width: 100%; margin: var(--s1) 0; }
 .pick { list-style: none; margin: 0 calc(-1 * var(--s1)); padding: 0; }
-.pick input[type=checkbox] { margin-left: 0; }
+/* Both lists lead with one 44px control column (Give: checkbox, Get: remove) so names start together
+   and every value ends flush under its side's total. */
+.pick input[type=checkbox] { flex: none; margin: 0 10px; }
+.pick .grow { font-weight: 500; }
+.pick .grow .muted { font-weight: 400; }
+/* A name is one unit: it never breaks between or inside its words ("Brandon / Ingram", "Gilgeous- / Alexander"). */
+.pick .pn { white-space: nowrap; }
 .pick .muted { white-space: nowrap; }
 .pick li { display: flex; align-items: center; gap: var(--s2); min-height: 48px; border-radius: var(--r); }
 .pick li.on { background: var(--accent-soft); }
 .pick label { display: flex; align-items: center; gap: var(--s2); width: 100%; min-height: 48px; padding: var(--s0) var(--s1); cursor: pointer; }
-.get .pick li { padding-left: var(--s1); }
+.get .pick li { padding: var(--s0) var(--s1); }
+.get .pick .rm { flex: none; }
 .grow { flex: 1; min-width: 0; }
+.rm:focus-visible { outline-offset: -2px; }
 .rm { display: grid; place-items: center; width: 44px; height: 44px; background: none; border: 0; border-radius: var(--r); color: var(--muted); cursor: pointer; }
 @media (hover: hover) { .pick li:not(.on):hover { background: var(--surface2); } .rm:hover { color: var(--bad); background: rgba(239, 107, 99, 0.12); } }
 .tradepage .empty { padding: var(--s2) 0; color: var(--muted); }
@@ -275,14 +293,15 @@ input.slots { width: 100%; max-width: 440px; font-family: var(--mono); }
 /* ---------- Player panel ---------- */
 .scrim { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: flex-end; background: rgba(4, 5, 7, 0.7); animation: fade 200ms var(--ease-out); }
 .drawer { position: relative; width: min(640px, 100%); height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--s4) calc(var(--s5) + env(safe-area-inset-bottom)); background: var(--surface); border-left: 1px solid var(--line2); outline: none; animation: drawer-in 220ms cubic-bezier(0.32, 0.72, 0, 1); }
-.dhead { position: sticky; top: 0; z-index: 3; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s2); margin: 0 calc(-1 * var(--s4)); padding: var(--s3) var(--s4) var(--s2); background: var(--surface); }
+.dhead { position: sticky; top: 0; z-index: 3; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s2); margin: 0 calc(-1 * var(--s4)); padding: var(--s3) var(--s4) var(--s2); background: var(--surface); border-bottom: 1px solid var(--line2); }
 .dtitle { min-width: 0; }
 .drawer h2 { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s1); margin: 0; font-size: 24px; line-height: 1.25; }
 .dtitle > .muted { margin-top: var(--s0); }
 .dweek { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s1); }
 .drawer .x { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -6px -10px 0 0; background: none; border: 0; border-radius: var(--r); color: var(--muted); cursor: pointer; }
 @media (hover: hover) { .drawer .x:hover { background: var(--surface2); color: var(--text); } }
-.dfacts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 var(--s3); border-top: 1px solid var(--line2); border-bottom: 1px solid var(--line2); }
+/* No top rule: the sticky head's bottom rule sits right above. */
+.dfacts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 var(--s3); border-bottom: 1px solid var(--line2); }
 .dfacts > div { padding: var(--s2) 0 var(--s2) var(--s2); border-left: 1px solid var(--line2); }
 .dfacts > div:first-child { padding-left: 0; border-left: 0; }
 .dfacts dt { color: var(--muted); font-size: var(--f-sm); }
@@ -327,7 +346,8 @@ input.slots { width: 100%; max-width: 440px; font-family: var(--mono); }
 @keyframes fade { from { opacity: 0; } }
 
 /* ---------- Finder ---------- */
-.cmdk-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(4, 5, 7, 0.6); animation: fade 140ms var(--ease-out); }
+/* Dark enough that no page edge reads as a second border under the finder. */
+.cmdk-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(4, 5, 7, 0.85); animation: fade 140ms var(--ease-out); }
 .cmdk { position: fixed; z-index: 61; top: 12vh; left: 50%; width: min(600px, calc(100% - 32px)); overflow: hidden; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--line2); border-radius: 10px; box-shadow: var(--shadow-pop); }
 .cmdk [cmdk-input] { width: 100%; height: 56px; padding: 0 var(--s2); background: transparent; border: 0; border-bottom: 1px solid var(--line2); border-radius: 0; font-size: 18px; outline: none; }
 .cmdk [cmdk-list] { max-height: min(440px, 60vh); overflow-y: auto; overscroll-behavior: contain; padding: var(--s0); }
@@ -341,6 +361,10 @@ input.slots { width: 100%; max-width: 440px; font-family: var(--mono); }
 .cmdk [cmdk-item] small { color: var(--muted); font-size: var(--f-sm); white-space: nowrap; }
 .cmdk [cmdk-empty] { padding: var(--s3); color: var(--muted); text-align: center; }
 .cmdk .foot { display: flex; gap: var(--s3); padding: var(--s1) var(--s2); border-top: 1px solid var(--line2); color: var(--muted); font-size: var(--f-sm); }
+/* Owned: the day's change sits in a fixed slot, so the % column holds still as it widens. */
+.ownchg { display: inline-block; min-width: 5ch; text-align: right; }
+/* The header's spacer is the change slot plus its space, in the cell's own font, so "Owned" ends over the %. */
+.ownpad { display: inline-block; width: 6ch; font: var(--f-base) var(--mono); }
 .own { display: inline-flex; align-items: center; height: 24px; padding: 0 var(--s1); border-radius: var(--s0); font-size: var(--f-sm); font-weight: 600; }
 .own.mine { color: var(--accent); background: var(--accent-soft); }
 .own.taken { color: var(--muted); background: var(--surface2); }
@@ -363,6 +387,10 @@ input.slots { width: 100%; max-width: 440px; font-family: var(--mono); }
 @media (max-width: 1099px) {
   .t th.opt, .t td.opt { display: none; }
   .tabs a { padding: 0 var(--s1); }
+  /* Under 1100 the kind pill takes its own row, so the move's words get the whole column
+     (inline, they had 204px at 900 and 73px at 641). */
+  .move { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--s1); }
+  .move .kind { grid-column: 1 / -1; }
 }
 
 /* ---------- Phones and portrait tablets: pages move under the thumb ----------
@@ -376,32 +404,49 @@ input.slots { width: 100%; max-width: 440px; font-family: var(--mono); }
   .findbtn { width: 44px; height: 44px; padding: 0; justify-content: center; border: 0; }
   .gear { display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r); color: var(--muted); }
   .gear.on { color: var(--text); background: var(--surface2); }
-  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0;
-    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); background: var(--bg); border-top: 1px solid var(--line2); }
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; gap: 0;
+    padding: 0 calc(var(--s1) + var(--s0) + env(safe-area-inset-right)) env(safe-area-inset-bottom) calc(var(--s1) + var(--s0) + env(safe-area-inset-left)); background: var(--bg); border-top: 1px solid var(--line2); }
   html { scroll-padding-bottom: calc(var(--tabbar) + env(safe-area-inset-bottom) + var(--s1)); }
   .tabs a.setup { display: none; }
-  .tabs a { position: relative; justify-content: center; height: var(--tabbar); padding: 0; border-radius: 0; font-size: var(--f-sm); font-weight: 600; }
+  /* Each tab is its label plus an equal share of the spare width: label gaps come out equal (equal cells
+     cannot do that, the labels differ by 20px), and the five tabs still cover the whole bar. */
+  .tabs a { flex: 1 1 auto; position: relative; justify-content: center; height: var(--tabbar); padding: 0; border-radius: 0; font-size: var(--f-sm); font-weight: 600; }
   .tabs a.on { background: none; }
-  .tabs a:focus-visible { outline-offset: -6px; }
-  .tabs a.on::before { content: ''; position: absolute; top: -1px; left: 20%; right: 20%; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
+  /* Ring and active bar follow the label, not the tab: the ring sits 4px off it on all four sides, and the
+     bar, at the bar's top edge, is exactly as wide as the word. */
+  .tabs a > span { position: relative; }
+  .tabs a:focus-visible { outline: none; }
+  .tabs a:focus-visible > span { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+  .tabs a.on > span::before { content: ''; position: absolute; top: calc((1lh - var(--tabbar)) / 2 - 1px); left: 0; right: 0; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); }
   .main { padding: var(--s3) var(--s3) calc(var(--tabbar) + var(--s5) + env(safe-area-inset-bottom)); }
-  .todaygrid { grid-template-columns: minmax(0, 1fr); }
+  .todaygrid { grid-template-columns: minmax(0, 1fr) 264px; gap: 0 var(--s4); }
   .sides { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .deal { grid-template-columns: minmax(0, 1fr); }
+  /* 800-899: the two cards side by side, 16px inside, which leaves the longest name (205px) its line.
+     No room for the arrows; the headings say it. */
+  .deal { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s2); }
+  .tradepage .side { padding: var(--s2); }
+  .swap { display: none; }
+  .skip { --col: var(--s3); }
+}
+
+/* Below 1200 a card is too narrow for name and team on one line every time; team takes its own line
+   always, so rows keep one height instead of mixing 48 and 68px. */
+@media (max-width: 1199px) { .pick .grow .muted { display: block; } }
+
+/* Under 800: one column for Today and Trade (two columns left move text under 240px and broke names). */
+@media (max-width: 799px) {
+  .todaygrid { grid-template-columns: minmax(0, 1fr); }
+  .deal { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+  .tradepage .side { padding: var(--s3); }
   /* Turn the arrows, not the box: a turned full-width box stood 720px tall at 768 and ate taps on the rows above and the field below. */
-  .swap { height: 32px; }
+  .swap { display: grid; height: 32px; margin: 0; }
   .swap svg { transform: rotate(90deg); }
 }
 
-/* ---------- Phones: tables fold into two-line cards ---------- */
-@media (max-width: 640px) {
-  .main { padding-left: var(--s2); padding-right: var(--s2); }
-  .top { padding-left: var(--s2); padding-right: var(--s1); }
-  .big { font-size: 56px; }
-  .heroword { font-size: var(--f-lg); }
-  .pagehead .tools, .pagehead .search { width: 100%; }
-  .move { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--s1); }
-  .move .kind { grid-column: 1 / -1; }
+/* ---------- Tables fold into two-line cards under 760 ----------
+   Unfolded, the Waivers table ran 18-57px past the screen at 641-699 and its Upgrade tag sat on the week
+   strip up to 759; Roster folds at the same width so both tables change together. */
+@media (max-width: 759px) {
   .t.fold, .t.fold thead, .t.fold tbody { display: block; width: auto; }
   .t.fold tr { display: grid; align-items: center; column-gap: var(--s2); padding: var(--s1) var(--s2); border-bottom: 1px solid var(--line); }
   .t.fold th, .t.fold td { display: block; height: auto; padding: 0; border: 0; position: static; background: none; }
@@ -427,14 +472,52 @@ input.slots { width: 100%; max-width: 440px; font-family: var(--mono); }
   .roster.fold tr.broken td, .wire.fold tr.upgrade td { background: none; }
   .roster.fold tr.broken { background: rgba(239, 107, 99, 0.1); }
   .wire.fold tr.upgrade { background: rgba(92, 194, 135, 0.07); }
-  .wire.fold .player .tag { margin-left: 0; }
   .t.fold .fp::after { content: ' a game'; }
+  /* The Upgrade tag always takes its own line under the name and team, so every row has one layout. */
+  .wire.fold .pline { flex-direction: column; align-items: flex-start; }
+}
+/* 760-899, unfolded: the tag dropped under the longer names only (5 of 12 rows at 760, 1 at 800), mixing
+   56 and 61px rows. Under the name on every row here too. ponytail: 900+ relies on today's longest name fitting. */
+@media (min-width: 760px) and (max-width: 899px) {
+  .wire .pline { flex-direction: column; align-items: flex-start; padding: var(--s1) 0; }
+}
+
+/* ---------- Phones: tables fold into two-line cards ---------- */
+@media (max-width: 640px) {
+  .main { padding-left: var(--s2); padding-right: var(--s2); }
+  .skip { --col: var(--s2); }
+  /* Trade rows: the name gets its own line across the value column (216px at 320, the longest is 205),
+     then team and value; the control (checkbox, or a 44px × with negative margins) spans both lines. */
+  .tradepage .side { padding: var(--s2); }
+  .pick label, .get .pick li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; grid-template-areas: 'ctl name name' 'ctl sub val'; gap: 0 var(--s2); align-items: center; padding: var(--s1); }
+  .pick .grow { display: contents; }
+  .pick .pn { grid-area: name; justify-self: start; }
+  .pick .grow .muted { grid-area: sub; }
+  .pick .num { grid-area: val; }
+  .pick input[type=checkbox] { grid-area: ctl; margin: 0; }
+  .get .pick .rm { grid-area: ctl; margin: -10px; }
+  /* The -10px margins put the 44px box 2px past the row's left edge; ring it inside: 4px in from the row. */
+  .get .pick .rm:focus-visible { outline-offset: -8px; border-radius: 12px; } /* ring radius 12 - 8 = 4, as on desktop (6 - 2) */
+  .top { padding-left: var(--s2); padding-right: var(--s1); }
+  .big { font-size: 56px; }
+  .heroword { font-size: var(--f-lg); }
+  .pagehead .tools, .pagehead .search { width: 100%; }
+  /* Today: gains share the title's row, right-aligned; the reason runs the full width under both. */
+  .move { grid-template-areas: 'kind kind' 'title gain' 'why why'; row-gap: 0; }
+  .move .kind { grid-area: kind; margin-bottom: var(--s1); }
+  .move .mbody { display: contents; }
+  .move .mtitle { grid-area: title; }
+  .move .mgain { grid-area: gain; }
+  .move .mwhy { grid-area: why; }
   .t th, .t td { padding-left: var(--s1); padding-right: var(--s1); }
   .dfacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dfacts > div:nth-child(odd) { padding-left: 0; border-left: 0; }
   .dfacts > div:nth-child(n + 3) { border-top: 1px solid var(--line2); }
   .drawer { padding-left: var(--s2); padding-right: var(--s2); border-left: 0; }
   .dhead { margin: 0 calc(-1 * var(--s2)); padding-left: var(--s2); padding-right: var(--s2); }
+  /* The × sits 6px from the screen edge (-10px margin in 16px padding); a ring outside it was 2px from the edge.
+     Ring it inside, the same 32px ring as Trade's remove ×. */
+  .drawer .x:focus-visible { outline-offset: -8px; border-radius: 12px; }
   .catbars { grid-template-columns: 1fr; }
   /* Drawer stats fold: the stretch name on its own line, then the eight numbers as 2 rows of 4, each under its own label. */
   .dstats .t, .dstats tbody { display: block; }
@@ -446,9 +529,18 @@ input.slots { width: 100%; max-width: 440px; font-family: var(--mono); }
   .drawer .dstats tbody tr:hover td { background: none; }
   .weights { grid-template-columns: 1fr; }
   .lsec .seg { align-self: stretch; display: flex; }
-  .filters .seg, .pagehead .seg { display: flex; flex-wrap: nowrap; width: 100%; }
-  .filters .seg button, .pagehead .seg button { flex: 1 1 auto; padding: 0 var(--s1); }
+  /* A grid, not flex: an auto track never drops below its button's longest word or the 44px floor,
+     so a one-word label ("Season") can't be squeezed out of its pill at 320. */
+  .filters .seg, .pagehead .seg { display: grid; grid-auto-flow: column; grid-auto-columns: auto; width: 100%; }
+  .filters .seg button, .pagehead .seg button { padding: 0 var(--s1); }
   .lsec .seg button { flex: 1 1 auto; padding: 0 var(--s1); }
+}
+
+/* Smallest phones: the slot column leaves the week strip 88px, too little for strip and points side
+   by side, so points a game take their own line. */
+@media (max-width: 360px) {
+  .roster.fold tr { grid-template-areas: 'slot player val' 'slot week week' 'slot fp fp'; }
+  .roster.fold .fp { justify-self: start; }
 }
 
 /* Any touchscreen: 44px targets, and a name's whole cell is the target. */
@@ -463,4 +555,8 @@ input.slots { width: 100%; max-width: 440px; font-family: var(--mono); }
   /* Arrow, Enter and Esc mean nothing without a keyboard. */
   .cmdk .foot { display: none; }
   button.link { min-height: 32px; }
+  /* In a move title the 32px box grew the 28px line and dropped the title's baseline 2px below "+35 pts"
+     beside it: keep the line, reach 32px with a hit area instead. */
+  .moves .mtitle button.link { position: relative; min-height: 0; }
+  .moves .mtitle button.link::before { content: ''; position: absolute; inset: -2px 0; }
 }

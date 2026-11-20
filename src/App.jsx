@@ -247,7 +247,7 @@ export default function App() {
   const nav = (
     <nav className="tabs" aria-label="Pages">
       {TABS.map(([k, label]) => (
-        <a key={k} href={`#${k}`} className={`${tab === k ? 'on' : ''}${k === 'league' ? ' setup' : ''}`} aria-current={tab === k ? 'page' : undefined}>{label}</a>
+        <a key={k} href={`#${k}`} className={`${tab === k ? 'on' : ''}${k === 'league' ? ' setup' : ''}`} aria-current={tab === k ? 'page' : undefined}><span>{label}</span></a>
       ))}
     </nav>
   )

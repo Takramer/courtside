@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import { etToday, weekBounds } from '../lib/model.js'
-import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt, heat, sfmt } from '../components.jsx'
+import { FormTag, PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt, heat, sfmt } from '../components.jsx'
 import { WeekHead, WeekStrip } from '../charts.jsx'
 import { priceSide } from './today.js'
 
-const SORTS = [['val', 'Season'], ['week', 'This week'], ['form', 'Hot'], ['trend', 'Most added']]
+// Short labels fit 44px buttons at 320; the full phrase is the accessible name.
+const SORTS = [['val', 'Season'], ['week', 'Week', 'This week'], ['form', 'Hot'], ['trend', 'Added', 'Most added']]
 const POS = ['All', 'PG', 'SG', 'SF', 'PF', 'C']
 
 export default function Waivers({ ctx }) {
@@ -51,7 +52,7 @@ export default function Waivers({ ctx }) {
       {worst && <p className="weakest">Your weakest: <PlayerName ctx={ctx} p={worst} sub={false} /> <span className="num">{fmt(worstVal)}</span></p>}
 
       <div className="filters">
-        <div className="seg" role="group" aria-label="Sort by">{SORTS.map(([k, label]) => <button key={k} aria-pressed={sort === k} className={sort === k ? 'on' : ''} onClick={() => setSort(k)}>{label}</button>)}</div>
+        <div className="seg" role="group" aria-label="Sort by">{SORTS.map(([k, label, full]) => <button key={k} aria-label={full} aria-pressed={sort === k} className={sort === k ? 'on' : ''} onClick={() => setSort(k)}>{label}</button>)}</div>
         <div className="seg" role="group" aria-label="Position">{POS.map((x) => <button key={x} aria-pressed={pos === x} className={pos === x ? 'on' : ''} onClick={() => setPos(x)}>{x}</button>)}</div>
       </div>
 
@@ -67,8 +68,8 @@ export default function Waivers({ ctx }) {
             <th className="week"><WeekHead mon={mon} today={today} /></th>
             <th className="num val"><ValueTip settings={settings} /></th>
             {pts ? <th className="num fp">Pts/g</th> : cats.map((c) => <th key={c.k} className="num opt" title={c.name}>{c.label}</th>)}
-            <th className="num opt"><Tip text="Last 15 days against his usual level">Form</Tip></th>
-            <th className="num opt"><Tip text="Share of ESPN teams, change today">Owned</Tip></th>
+            <th className="opt"><Tip text={pts ? 'Last 15 days vs projected, points a game' : 'Last 15 days against his usual level'}>Form</Tip></th>
+            <th className="num opt"><Tip text="Share of ESPN teams, change today">Owned</Tip><span className="ownpad" aria-hidden="true" /></th>
             <th className="actions"><span className="sr">Add</span></th>
           </tr></thead>
           <tbody>
@@ -78,12 +79,12 @@ export default function Waivers({ ctx }) {
               const loud = upgrade && ++ups <= 3
               return (
                 <tr key={p.id} className={upgrade ? 'upgrade' : ''}>
-                  <td className="player"><PlayerName ctx={ctx} p={p} />{upgrade && <span className="tag good">Upgrade</span>}</td>
+                  <td className="player"><div className="pline"><PlayerName ctx={ctx} p={p} />{upgrade && <span className="tag good">Upgrade</span>}</div></td>
                   <td className="week"><WeekStrip team={teams[p.team]} teams={teams} mon={mon} today={today} /></td>
                   <td className="heat val"><i style={heat(v?.val, maxVal)} /><span>{fmt(v?.val)}</span></td>
                   {pts ? <td className="num fp">{fmt(v?.fp)}</td> : cats.map((c) => <ZCell key={c.k} z={v?.z[c.k]} />)}
-                  <td className="num opt">{v?.trend ? sfmt(v.trend) : '–'}</td>
-                  <td className="num opt">{fmt(p.own, 0)}% <span className="muted">{sfmt(p.ownChg)}</span></td>
+                  <td className="opt"><FormTag v={v} settings={settings} /></td>
+                  <td className="num opt">{fmt(p.own, 0)}% <span className="muted ownchg">{sfmt(p.ownChg)}</span></td>
                   <td className="actions"><button className={`btn sm ${loud ? '' : 'ghost'}`} onClick={() => ctx.moveTo(p.id, 'mine')} aria-label={`I added ${p.name}`}>I added him</button></td>
                 </tr>
               )

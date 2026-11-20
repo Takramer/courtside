@@ -8,6 +8,27 @@ import { BarList, WeekStrip } from './charts.jsx'
 export const fmt = (x, d = 1) => (x == null || Number.isNaN(x) ? '–' : (Math.abs(x) < 0.5 / 10 ** d ? 0 : x).toFixed(d).replace('-', '−'))
 // Signed: '+' only when the printed value is above zero.
 export const sfmt = (x, d = 1) => (x != null && Math.abs(x) >= 0.5 / 10 ** d && x > 0 ? '+' : '') + fmt(x, d)
+// Form, one meaning on every page: Hot, Cold or Steady against his usual level over 15 days.
+// The number rides in the tooltip and, for screen readers, after the word.
+// formOf is the one source for the word, the number and the sentence; the panel reads the same.
+// Points leagues: trend is last-15-day fantasy points minus the projection (model.js), so the
+// sentence names both, the same two bars the panel draws, and the gap is their printed difference.
+export function formOf(v, settings) {
+  if (!v?.trend) return null // no recent games: no form to report
+  const pts = settings.format === 'points'
+  const swing = pts ? 4 : 1.5
+  const [cls, word] = v.trend > swing ? ['tag good', 'Hot'] : v.trend < -swing ? ['tag bad', 'Cold'] : ['muted', 'Steady']
+  if (!pts) { const n = sfmt(v.trend); return { cls, word, n, text: `${n} over the last 15 days against his usual level` } }
+  const r1 = (x) => Math.round(x * 10) / 10
+  const recent = r1(v.fp + v.trend); const proj = r1(v.fp)
+  const n = sfmt(recent - proj)
+  return { cls, word, n, text: `last 15 days ${fmt(recent)} vs projected ${fmt(proj)} = ${n} a game` }
+}
+export function FormTag({ v, settings }) {
+  const f = formOf(v, settings)
+  if (!f) return '–'
+  return <span className={f.cls} title={f.text}>{f.word}<span className="sr"> {f.n}</span></span>
+}
 export const ago = (iso) => {
   const h = (Date.now() - new Date(iso)) / 36e5
   return `${h < 1 ? `${Math.max(1, Math.round(h * 60))}m` : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`}\u00a0ago`
@@ -119,8 +140,9 @@ export function plainTake(ctx, p) {
     if (good.length) out.push(`Wins you ${good.join(', ')}.`)
     if (bad.length) out.push(`Hurts you in ${bad.join(', ')}.`)
   } else out.push(`Projects about ${fmt(v.fp)} fantasy points a game.`)
-  if (v.trend > (settings.format === 'points' ? 4 : 1.5)) out.push('Playing well above his projection over the last 15 days (hot).')
-  if (v.trend < -(settings.format === 'points' ? 4 : 1.5)) out.push('Playing below his projection over the last 15 days (cold). Check the news for a reason.')
+  // Points leagues say this once, under the chart; categories leagues have no chart, so it lives here.
+  const f = settings.format === 'cats' && formOf(v, settings)
+  if (f && f.word !== 'Steady') out.push(`${f.word}: ${f.text}.${f.word === 'Cold' ? ' Check the news for a reason.' : ''}`)
   if (v.line.gp < 60) out.push(`Projected for only ${Math.round(v.line.gp)} games, so expect missed time.`)
   const [a, b] = weekBounds(etToday())
   const all = gamesBetween(ctx.teams[p.team], a, b).length
@@ -138,19 +160,19 @@ const STRETCHES = [['last', 'Last season'], ['proj', 'Projected'], ['cur', 'This
 // Fantasy points a game in each stretch, in this league's scoring. The latest stretch is the
 // one lit; the others are the baseline it is read against.
 function Stretches({ ctx, p }) {
-  const rows = STRETCHES.filter(([k]) => p.stats[k]?.gp > 0 || (k === 'proj' && p.stats[k]))
-    .map(([k, label]) => ({ key: k, label, value: fantasyPoints(p.stats[k], ctx.settings.weights), sub: k === 'proj' ? '' : `${Math.round(p.stats[k].gp)}g` }))
+  const v = ctx.values.get(p.id)
+  // Projected is the app's own projection (the blend every page prices with, "Pts a game" above),
+  // not ESPN's raw line, so the Form sentence under the chart is these two bars' difference.
+  const rows = STRETCHES.filter(([k]) => p.stats[k]?.gp > 0 || (k === 'proj' && (v || p.stats[k])))
+    .map(([k, label]) => ({ key: k, label, value: k === 'proj' && v ? v.fp : fantasyPoints(p.stats[k], ctx.settings.weights), sub: k === 'proj' ? '' : `${Math.round(p.stats[k].gp)}g` }))
   if (rows.length < 2) return null
   const latest = rows[rows.length - 1]
-  const proj = rows.find((r) => r.key === 'proj')
-  const diff = proj && latest.key !== 'proj' ? latest.value - proj.value : null
+  const form = formOf(v, ctx.settings)
   return (
     <>
       <h3>Fantasy points a game</h3>
       <BarList rows={rows} hi={latest.key} />
-      {diff != null && Math.abs(diff) >= 1 && (
-        <p className="note">{latest.label}: {diff > 0 ? '+' : '\u2212'}{fmt(Math.abs(diff))} a game against projection</p>
-      )}
+      {form && <p className="note">{form.word}: {form.text}.</p>}
     </>
   )
 }
@@ -158,7 +180,8 @@ function Stretches({ ctx, p }) {
 // The stats the scoring leans on, nothing else: eight numbers fit the panel at every width
 // without a sideways scroll.
 const STAT_HEAD = [['pts', 'PTS', 'Points'], ['reb', 'REB', 'Rebounds'], ['ast', 'AST', 'Assists'], ['stl', 'STL', 'Steals'], ['blk', 'BLK', 'Blocks'], ['to', 'TO', 'Turnovers (lower is better)'], ['tpm', '3PM', '3-pointers made'], ['min', 'MIN', 'Minutes']]
-const OWNERS = [['mine', 'On my team'], ['taken', 'Another team'], ['free', 'Available']]
+// One word each fits a 44px pill at 320; the accessible name keeps that word and the full phrase.
+const OWNERS = [['mine', 'Mine', 'Mine, on my team'], ['taken', 'Taken', 'Taken, by another team'], ['free', 'Free', 'Free, available']]
 
 export function PlayerDrawer({ ctx, p, onClose }) {
   const [press, setPress] = useState(null)
@@ -223,8 +246,8 @@ export function PlayerDrawer({ ctx, p, onClose }) {
         <div className="downer">
           <span id="owner-label">Owner</span>
           <div className="seg" role="group" aria-labelledby="owner-label">
-            {OWNERS.map(([k, label]) => (
-              <button key={k} className={owner === k ? 'on' : ''} aria-pressed={owner === k} onClick={() => ctx.moveTo(p.id, k)}>{label}</button>
+            {OWNERS.map(([k, label, full]) => (
+              <button key={k} className={owner === k ? 'on' : ''} aria-label={full} aria-pressed={owner === k} onClick={() => ctx.moveTo(p.id, k)}>{label}</button>
             ))}
           </div>
         </div>
