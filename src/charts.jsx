@@ -7,17 +7,12 @@
 //   - every value is also on the page in words or in a table, so no tooltip gates anything
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import { fmt } from './components.jsx'
+import { dayName, weekDates } from './pages/today.js'
 import './charts.css'
 
-const DAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+export { dayName, weekDates }
 const sign = (x, d = 0) => { const r = +x.toFixed(d) || 0; return r > 0 ? `+${fmt(r, d)}` : r < 0 ? `−${fmt(-r, d)}` : '0' }
 const pct = (x, lo, hi) => `${(100 * (x - lo)) / (hi - lo || 1)}%`
-
-// The seven dates of a fantasy week, Monday first.
-export const weekDates = (mon) => Array.from({ length: 7 }, (_, i) => {
-  const d = new Date(`${mon}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10)
-})
-export const dayName = (date) => DAY[(new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7]
 
 // SVG has to be drawn at its real width, or its 12px labels shrink to 9px on a phone.
 function useWidth(fallback = 560) {
@@ -132,8 +127,11 @@ export function OutcomeDots({ q, oppName = 'He' }) {
           </g>
         ))}
       </svg>
-      <figcaption>
-        <b>You win {wins} of {n}</b> equally likely endings. Each dot is one: <span className="key win" /> solid you win, <span className="key loss" /> open {oppName.toLowerCase() === 'he' ? 'he does' : 'they do'}. The middle dot is the likeliest single result: {words(mid)}.
+      <figcaption className="legend">
+        <b>You win {wins} of {n}</b>
+        <span><span className="key win" /> you win</span>
+        <span><span className="key loss" /> {oppName} wins</span>
+        <span>Middle: {words(mid)}</span>
       </figcaption>
     </figure>
   )
@@ -163,8 +161,8 @@ export function RaceBars({ rows }) {
       <div className="raxis" aria-hidden="true">{tk.map((t) => <span key={t} style={{ left: pct(t, 0, top) }}>{t.toLocaleString()}</span>)}</div>
       <figcaption className="legend">
         <span><i className="sw solid" /> scored</span>
-        <span><i className="sw wash" /> still to come</span>
-        <span><i className="sw whisk" /> give or take, about 2 weeks in 3 land inside</span>
+        <span><i className="sw wash" /> to come</span>
+        <span><i className="sw whisk" /> likely range</span>
       </figcaption>
     </figure>
   )
@@ -231,78 +229,51 @@ export function BarList({ rows, max, unit = '', hi }) {
 
 /**
  * The trade on a scale: how far from even, and which side of "close" it lands. The middle
- * band is the app's own threshold for a clear difference, drawn rather than hidden.
+ * band is the app's own threshold for a clear difference, drawn rather than hidden. `delta`
+ * and `unit` share one unit, named by `unitLabel` (" wins") and printed to `digits`.
  */
-export function TradeScale({ delta, unit, unitLabel = '' }) {
+export function TradeScale({ delta, unit, unitLabel = '', digits = 1 }) {
+  const ref = useRef(null)
   const R = Math.max(Math.abs(delta) * 1.3, unit * 3)
+  const x = (v) => (v + R) / (2 * R)
   const at = (v) => pct(v, -R, R)
+  const d = Math.abs(delta) >= 1 ? 1 : digits
+  // A label shows only where it fits with 8px to spare: a lopsided trade leaves the band a few px wide.
+  useLayoutEffect(() => {
+    const fig = ref.current
+    const fit = () => {
+      for (const z of fig.querySelectorAll('.tzones span')) z.classList.toggle('mute', z.firstChild.offsetWidth + 8 > z.clientWidth)
+      const half = fig.querySelector('.ttrack .band').offsetWidth / 2
+      const [lo, mid] = fig.querySelectorAll('.tticks span')
+      fig.classList.toggle('tight', (lo.offsetWidth + mid.offsetWidth) / 2 + 8 > half)
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(fig)
+    return () => ro.disconnect()
+  }, [delta, unit, digits])
+  // The value's label hangs off the marker toward the middle, so it never runs past the track.
+  const side = x(delta) < 0.3 ? 'l' : x(delta) > 0.7 ? 'r' : ''
   return (
-    <figure className="chart tscale">
+    <figure className="chart tscale" ref={ref}>
       <div className="tzones" aria-hidden="true">
-        <span className="no" style={{ width: at(-unit) }}>Say no</span>
-        <span className="close" style={{ width: `calc(${at(unit)} - ${at(-unit)})` }}>Close</span>
-        <span className="yes">Take it</span>
+        <span className="no" style={{ width: at(-unit) }}><em>Say no</em></span>
+        <span className="close" style={{ width: `calc(${at(unit)} - ${at(-unit)})` }}><em>Close</em></span>
+        <span className="yes"><em>Take it</em></span>
       </div>
-      <div className="ttrack" role="img" aria-label={`Net value ${sign(delta, 1)}. Anything inside ${unit} either way is a close call.`}>
+      <div className="ttrack" role="img" aria-label={`Net ${sign(delta, d)}${unitLabel}. Anything inside ${fmt(unit, digits)}${unitLabel} either way is a close call.`}>
         <i className="zno" style={{ width: at(-unit) }} />
         <i className="band" style={{ left: at(-unit), width: `calc(${at(unit)} - ${at(-unit)})` }} />
         <i className="zyes" style={{ left: at(unit) }} />
         <i className="even" style={{ left: at(0) }} />
-        <i className="mark" style={{ left: at(delta) }} />
+        <i className="mark" style={{ left: `clamp(2px, ${at(delta)}, calc(100% - 2px))` }} />
       </div>
       <div className="tticks" aria-hidden="true">
-        <span style={{ left: at(-unit) }}>{sign(-unit, 1)}</span>
+        <span className="edge" style={{ left: at(-unit) }}>{sign(-unit, digits)}</span>
         <span style={{ left: at(0) }}>even</span>
-        <span style={{ left: at(unit) }}>{sign(unit, 1)}</span>
-        <b style={{ left: at(delta) }}>{sign(delta, 1)}{unitLabel}</b>
+        <span className="edge" style={{ left: at(unit) }}>{sign(unit, digits)}</span>
+        <b className={side} style={{ left: at(delta) }}>{sign(delta, d)}{unitLabel}</b>
       </div>
-    </figure>
-  )
-}
-
-/**
- * A reliability diagram. Each dot is a band of forecasts: across, what it said; up, how
- * often those weeks were won. On the diagonal it meant what it said. Under it, it was too
- * sure; over it, too timid. Dot area follows how many weeks are in the band.
- */
-export function Calibration({ buckets }) {
-  const [ref, w0] = useWidth(320)
-  const w = Math.min(w0, 380)
-  const pad = { l: 40, r: 12, t: 12, b: 40 }
-  const size = w - pad.l - pad.r
-  const h = size + pad.t + pad.b
-  const x = (p) => pad.l + p * size
-  const y = (p) => pad.t + (1 - p) * size
-  const maxN = Math.max(1, ...buckets.map((b) => b.n))
-  const rad = (n) => 4 + 6 * Math.sqrt(n / maxN)
-  const grid = [0, 0.25, 0.5, 0.75, 1]
-  const pts = buckets.map((b) => `${x(b.said)},${y(b.actual)}`).join(' ')
-  return (
-    <figure className="chart calib" ref={ref}>
-      <svg width={w} height={h} role="img" aria-label={`Forecasts against results, ${buckets.length} bands. ${buckets.map((b) => `Said ${Math.round(b.said * 100)}%, won ${Math.round(b.actual * 100)}%`).join('; ')}.`}>
-        {grid.map((g) => (
-          <g key={g}>
-            <line className="grid" x1={x(0)} x2={x(1)} y1={y(g)} y2={y(g)} />
-            <line className="grid" x1={x(g)} x2={x(g)} y1={y(0)} y2={y(1)} />
-            <text x={pad.l - 8} y={y(g) + 4} textAnchor="end">{Math.round(g * 100)}</text>
-            <text x={x(g)} y={y(0) + 18} textAnchor="middle">{Math.round(g * 100)}</text>
-          </g>
-        ))}
-        <line className="ideal" x1={x(0)} y1={y(0)} x2={x(1)} y2={y(1)} />
-        <text className="note" x={x(0.04)} y={y(0.9)}>too timid</text>
-        <text className="note" x={x(0.96)} y={y(0.1)} textAnchor="end">too sure</text>
-        {buckets.map((b) => <line key={`m${b.from}`} className="miss" x1={x(b.said)} x2={x(b.said)} y1={y(b.said)} y2={y(b.actual)} />)}
-        <polyline className="curve" points={pts} />
-        {buckets.map((b) => (
-          <g key={b.from}>
-            <title>{`Said ${Math.round(b.said * 100)}%, won ${Math.round(b.actual * 100)}% of ${b.n.toLocaleString()} weeks`}</title>
-            <circle className="hit" cx={x(b.said)} cy={y(b.actual)} r={12} />
-            <circle className="pt" cx={x(b.said)} cy={y(b.actual)} r={rad(b.n)} />
-          </g>
-        ))}
-        <text className="axt" x={x(0.5)} y={h - 4} textAnchor="middle">it said (% chance to win)</text>
-      </svg>
-      <figcaption>Up the side: how often those weeks were actually won. On the diagonal, it meant what it said.</figcaption>
     </figure>
   )
 }

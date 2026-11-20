@@ -58,6 +58,16 @@ export default async function handler(req, res) {
     if (!fr.ok) throw new Error(espnError(fr.status, league))
     const fj = await fr.json()
 
+    // UNVERIFIED field names (spec, engine v2): this endpoint needs the owner's cookies, so the
+    // paths below are from memory of ESPN's mSettings payload and have never been read against
+    // the real league. Check once with Object.keys(j.settings.acquisitionSettings) and fix them.
+    // Every lookup returns null when absent; the decision layer reads null as "no limit".
+    const set = j.settings || {}
+    const period = j.status?.currentMatchupPeriod ?? null
+    const used = (t) => (period == null ? null : t.transactionCounter?.matchupAcquisitionTotals?.[period] ?? null)
+    const byTeam = Object.fromEntries((j.teams || []).map((t) => [t.id, used(t)]))
+    const periods = set.scheduleSettings?.matchupPeriodCount
+
     res.setHeader('Cache-Control', 'no-store')
     res.status(200).json({
       at: new Date().toISOString(),
@@ -67,6 +77,15 @@ export default async function handler(req, res) {
       teams: (j.teams || []).map((t) => ({ id: t.id, name: teamName(t), abbrev: t.abbrev || '' })),
       rosters,
       freeIds: (fj.players || []).map((p) => p.id ?? p.player?.id).filter(Boolean),
+      // `team` in the body is optional (as in api/matchup.js); without it, read byTeam[yourId].
+      acq: {
+        limit: set.acquisitionSettings?.matchupAcquisitionLimit ?? null,
+        used: body.team != null ? byTeam[Number(body.team)] ?? null : null,
+        byTeam,
+      },
+      weeksLeft: periods != null && period != null ? Math.max(0, periods - period) : null,
+      // ESPN documents a games-played limit but the field name is unknown: this path is a guess.
+      gamesLimit: set.scheduleSettings?.matchupGamesPlayedLimit ?? set.acquisitionSettings?.gamesPlayedLimit ?? null,
     })
   } catch (e) {
     res.status(502).json({ error: String(e.message || e) })

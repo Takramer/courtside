@@ -1,145 +1,52 @@
-import React, { useEffect, useMemo } from 'react'
-import { etToday, gameOn, gamesBetween, weekBounds } from '../lib/model.js'
-import { availability, marginQuantiles, nightlyLoad, opponentFactor, projectPlayer, weekOutlook } from '../lib/predict.js'
-import { recordWeek } from '../lib/grade.js'
-import { Tip, fmt } from '../components.jsx'
-import { NightBars, OutcomeDots, RaceBars, weekDates } from '../charts.jsx'
-import { useMatchup } from '../lib/espn.js'
-import './matchup.css'
+import React from 'react'
+import { etToday, gameOn } from '../lib/model.js'
+import { Tip, fmt, sfmt } from '../components.jsx'
+import { NightBars, OutcomeDots, RaceBars } from '../charts.jsx'
 
 const time = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-const SEASON_TAG = '2026-27'
-
-// One player's day: where he is playing, and what he has scored so far.
-function Line({ ctx, p, today }) {
-  const pro = ctx.teams[p.team]
-  const g = gameOn(pro, today)
-  const known = ctx.byId.get(p.id)
-  const out = p.inj === 'OUT' || p.inj === 'INJURY_RESERVE' || p.inj === 'SUSPENSION'
-  return (
-    <tr className={p.starting ? '' : 'bench'}>
-      <td className="slot">{p.slot}</td>
-      <td className="who">
-        {known ? <button className="link" onClick={() => ctx.open(p.id)}>{p.name}</button> : p.name}
-        {out && <span className="tag bad">out</span>}
-      </td>
-      <td className="opp">{g ? `${g.home ? 'vs' : '@'} ${ctx.teams[g.opp]?.abbrev ?? '–'} ${time(g.t)}` : 'no game'}</td>
-      <td className="num strong">{p.points == null ? '–' : fmt(p.points, 1)}</td>
-    </tr>
-  )
-}
+const pct = (x) => `${Math.round(x * 100)}%`
 
 function Side({ ctx, side, today, label }) {
-  const starters = side.players.filter((p) => p.starting)
-  const bench = side.players.filter((p) => !p.starting)
   return (
     <div className="side">
       <h3>{label}</h3>
-      <div className="scroll">
-      <table className="t">
-        <thead><tr><th>Slot</th><th>Player</th><th>Game</th><th className="num">Today</th></tr></thead>
+      <table className="t compact">
+        <thead><tr><th>Slot</th><th>Player</th><th>Game</th><th className="num">Pts</th></tr></thead>
         <tbody>
-          {starters.map((p, i) => <Line key={`s${p.id}${i}`} ctx={ctx} p={p} today={today} />)}
-          {bench.length > 0 && <tr className="split"><td colSpan="4">Bench — these score nothing</td></tr>}
-          {bench.map((p, i) => <Line key={`b${p.id}${i}`} ctx={ctx} p={p} today={today} />)}
+          {[...side.players.filter((p) => p.starting), ...side.players.filter((p) => !p.starting)].map((p, i) => {
+            const g = gameOn(ctx.teams[p.team], today)
+            const out = ['OUT', 'INJURY_RESERVE', 'SUSPENSION'].includes(p.inj)
+            return (
+              <tr key={`${p.id}${i}`} className={p.starting ? '' : 'bench'}>
+                <td className="slot">{p.slot}</td>
+                <td>{ctx.byId.get(p.id) ? <button className="link" onClick={() => ctx.open(p.id)}>{p.name}</button> : p.name}{out && <span className="badge out">OUT</span>}</td>
+                <td className="muted">{g ? `${g.home ? 'vs' : '@'} ${ctx.teams[g.opp]?.abbrev ?? '–'} ${time(g.t)}` : '–'}</td>
+                <td className="num">{p.points == null ? '–' : fmt(p.points, 1)}</td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
-      </div>
     </div>
   )
 }
 
-// Turn one side of the ESPN matchup into something predict.js can price: a projection per
-// player, how many games he has left before Sunday, and who he draws in each of them.
-// Team.jsx prices your own roster with it too, so both pages project the week the same way.
-export function priceSide(ctx, side, today, weekEnd, currentSeason, now) {
-  const out = []
-  let unknown = 0
-  for (const p of side.players) {
-    const known = ctx.byId.get(p.id)
-    const form = ctx.formBy.get(p.id)
-    const espnFp = ctx.values.get(p.id)?.fp
-    if (espnFp == null && !form) { unknown++; continue } // deep bench, nothing to price him on
-    // The live matchup carries its own injury flag, fresher than the player pool's, so it
-    // goes in first. One resolver, the same answer the rest of the app gets.
-    const { status } = availability({
-      inj: p.inj || known?.inj,
-      report: ctx.injuryBy.get(p.id),
-      news: ctx.newsBy.get(p.id),
-    })
-    const proj = projectPlayer({ espnFp, form, status, current: currentSeason })
-    // A game that has tipped off is already in ESPN's score, which goes in as banked points.
-    // Counting it here as well would price the same night twice.
-    // ponytail: a game in progress counts only what he has scored so far; the rest of his
-    // night is missing from the projection until the final buzzer, a few points at most.
-    const games = gamesBetween(ctx.teams[p.team], today, weekEnd).filter((g) => g.d > today || g.t > now)
-    // One multiplier per night, in date order: a week against Washington is not a week
-    // against Boston. Without the table every night counts at face value, as before.
-    const adj = ctx.dvp
-      ? games.map((g) => opponentFactor(ctx.dvp, ctx.teams[g.opp]?.abbrev, known?.pos || []))
-      : null
-    out.push({ id: p.id, name: p.name, ...proj, games: games.length, dates: games.map((g) => g.d), adj })
-  }
-  return { players: out, unknown }
-}
-
 export default function Matchup({ ctx }) {
-  const live = useMatchup(ctx.espn.league && ctx.espn.team ? ctx.espn : null)
+  const { live, odds, backtest: bt } = ctx
   const d = live.data
   const today = etToday()
-  const [weekStart, weekEnd] = weekBounds(today)
-  const slots = ctx.settings.slots.split(',').map((x) => x.trim()).filter(Boolean)
-  // Days left in the fantasy week, today included: the lineup cap is per day, not per week,
-  // and phase 8 records it so a Thursday forecast is never graded as a full-week claim.
-  const daysLeft = Math.max(1, Math.round((new Date(`${weekEnd}T12:00:00Z`) - new Date(`${today}T12:00:00Z`)) / 86400000) + 1)
-
-  // This season's own games get trusted by how many there are; last season's only as a prior.
-  const currentSeason = ctx.formCurrent
-  const odds = useMemo(() => {
-    if (!d?.me || !d?.opp || !ctx.players.length) return null
-    const now = Date.now()
-    const mine = priceSide(ctx, d.me, today, weekEnd, currentSeason, now)
-    const theirs = priceSide(ctx, d.opp, today, weekEnd, currentSeason, now)
-    if (!mine.players.length || !theirs.players.length) return null
-    // What is already on the board counts. Until phase 9 a Thursday forecast compared only
-    // the games left, so a 300-point lead read as a coin flip.
-    const out = weekOutlook(mine.players, theirs.players, {
-      starts: slots.length, days: daysLeft, banked: [d.me.week || 0, d.opp.week || 0], sdScale: ctx.sdScale,
-    })
-    // What the pictures need on top of the numbers: twenty equally likely margins, and how
-    // many men each side has on each night left.
-    const nights = weekDates(weekStart).filter((x) => x >= today)
-    return {
-      ...out,
-      q: marginQuantiles(out.me, out.opp, 20, ctx.sdScale),
-      nights,
-      load: [nightlyLoad(mine.players, nights), nightlyLoad(theirs.players, nights)],
-      unknown: mine.unknown + theirs.unknown,
-    }
-  }, [d, ctx.players, ctx.formBy, ctx.dvp, ctx.sdScale, today, weekEnd, currentSeason, slots.length, daysLeft])
-
-  // Phase 8. Write this week's claim down the first time it is seen and never again: the
-  // thing worth grading is what the model said before it knew. recordWeek ignores a week it
-  // already holds, so opening the app on Thursday cannot quietly improve Monday's forecast.
-  useEffect(() => {
-    if (!odds || !d?.matchupPeriod) return
-    ctx.setLedger((l) => recordWeek(l, {
-      week: d.matchupPeriod,
-      season: SEASON_TAG,
-      pWin: odds.pWin, pWinRaw: odds.pWinRaw, sdScale: odds.sdScale,
-      myMu: odds.me.mu, mySd: odds.me.sd, myGames: odds.me.games,
-      oppMu: odds.opp.mu, oppSd: odds.opp.sd, oppGames: odds.opp.games,
-      me: d.me?.name ?? null, opp: d.opp?.name ?? null,
-      daysLeft,
-    }))
-  }, [odds, d?.matchupPeriod])
+  const slots = ctx.settings.slots.split(',').map((x) => x.trim()).filter(Boolean).length
+  const track = bt?.graded > 0 && <p className="track">Tested on {bt.graded.toLocaleString()} matchups from last season.</p>
 
   if (!ctx.espn.league || !ctx.espn.team) {
     return (
-      <div className="page narrow">
-        <h1>This week</h1>
-        <p className="lead">Live scoring comes straight from your ESPN league, so it needs the league connected first.</p>
-        <p><a className="btn" href="#league">Connect my league</a></p>
+      <div className="page matchuppage">
+        <h1>Matchup</h1>
+        <div className="emptystate">
+          <b>Connect your ESPN league to see the matchup.</b>
+          <div className="row"><a className="btn" href="#league">Connect league</a></div>
+        </div>
+        {track}
       </div>
     )
   }
@@ -149,119 +56,86 @@ export default function Matchup({ ctx }) {
   return (
     <div className="page matchuppage">
       <div className="pagehead">
-        <div>
-          <h1>This week</h1>
-          <p className="lead">Your head-to-head as ESPN has it. Points land a minute or two after the box score moves.</p>
-        </div>
-        <div className="headmeta">
-          <span className={`livetag ${live.loading ? 'on' : ''}`}>{live.at ? `Updated ${time(live.at)}` : 'Reading ESPN…'}</span>
-          <button className="btn ghost sm" onClick={live.reload} disabled={live.loading}>Refresh</button>
+        <h1>{d?.opp ? <>Week {d.matchupPeriod} <span className="muted">vs {d.opp.name}</span></> : 'Matchup'}</h1>
+        <div className="tools">
+          <span className="muted">{live.at ? `Updated ${time(live.at)}` : 'Reading ESPN…'}</span>
+          <button className="btn ghost" onClick={live.reload} disabled={live.loading}>Refresh</button>
         </div>
       </div>
 
       {live.error && <p className="banner bad">{live.error}</p>}
-
-      {d && !d.me && <p className="banner">ESPN has no matchup for you in week {d.matchupPeriod} yet. It appears once the league schedule is up.</p>}
+      {d && !d.me && <p className="banner">No matchup in week {d.matchupPeriod} yet.</p>}
 
       {d?.me && d?.opp && (
         <>
-          <section className="score">
-            <div className={`team ${lead > 0 ? 'ahead' : ''}`}>
-              <span className="tname">{d.me.name}</span>
-              <b>{fmt(d.me.week, 1)}</b>
-              <small>{fmt(d.me.today, 1)} today</small>
-            </div>
-            <span className="vs">vs</span>
-            <div className={`team ${lead < 0 ? 'ahead' : ''}`}>
-              <span className="tname">{d.opp.name}</span>
-              <b>{fmt(d.opp.week, 1)}</b>
-              <small>{fmt(d.opp.today, 1)} today</small>
-            </div>
-          </section>
-          <p className="verdict">
-            {lead === 0 ? 'Dead level.' : lead > 0 ? `You are ahead by ${fmt(lead, 1)}.` : `You are behind by ${fmt(-lead, 1)}.`}
-            {' '}Week {d.matchupPeriod}, day {d.scoringPeriod}.
-          </p>
+          {odds && (
+            <section className="hero" aria-label="Win odds">
+              <p className="heroline"><span className="big">{pct(odds.pWin)}</span><span className="heroword">to win</span></p>
+              <p className="herosub">
+                Score {fmt(d.me.week, 1)} to {fmt(d.opp.week, 1)}, {lead === 0 ? 'level' : lead > 0 ? `up ${fmt(lead, 1)}` : `down ${fmt(-lead, 1)}`}.
+                {' '}Projected {fmt(odds.me.mu, 0)} to {fmt(odds.opp.mu, 0)}.
+              </p>
+            </section>
+          )}
+          {!odds && <p className="herosub">Score {fmt(d.me.week, 1)} to {fmt(d.opp.week, 1)}.</p>}
 
-          {odds && <Odds odds={odds} updated={ctx.formUpdated} dvp={ctx.dvp} oppName={d.opp.name} slots={slots.length} today={today} />}
-          <div className="sides">
-            <Side ctx={ctx} side={d.me} today={today} label="Your day" />
-            <Side ctx={ctx} side={d.opp} today={today} label={`${d.opp.name}'s day`} />
-          </div>
+          {odds && <Odds odds={odds} oppName={d.opp.name} slots={slots} today={today} />}
+
+          <details className="fold-sec">
+            <summary>Today's box score</summary>
+            <div className="sides">
+              <Side ctx={ctx} side={d.me} today={today} label="You" />
+              <Side ctx={ctx} side={d.opp} today={today} label={d.opp.name} />
+            </div>
+          </details>
         </>
       )}
+      {track}
     </div>
   )
 }
 
-const pct = (x) => `${Math.round(x * 100)}%`
-
-// The odds, and what they rest on. The number is the claim; the pictures under it are the
-// reasons: how the twenty endings fall, where both sides stand, which nights are crowded.
-function Odds({ odds, updated, dvp, oppName, slots, today }) {
-  const { pWin, me, opp, swing, danger, matchupEdge, sdScale } = odds
-  const verdict = pWin > 0.8 ? 'You should win this'
-    : pWin > 0.6 ? 'You are favoured'
-      : pWin > 0.4 ? 'This is a coin flip'
-        : pWin > 0.2 ? 'You are the underdog' : 'You need help'
+function Odds({ odds, oppName, slots, today }) {
+  const { me, opp, swing, danger, matchupEdge } = odds
   const maxCost = Math.max(0.01, ...swing.map((p) => p.cost))
   const [myNights, oppNights] = odds.load
   const edge = myNights.reduce((n, v) => n + Math.min(v, slots), 0) - oppNights.reduce((n, v) => n + Math.min(v, slots), 0)
 
   return (
-    <section className="odds">
-      <div className="oddshead">
-        <span className="big">{pct(pWin)}</span>
-        <div>
-          <b>{verdict}</b>
-          <small>
-            Chance of winning the week, from each player's average, how much he swings, how
-            often he plays, and the games left on the calendar. Not ESPN's number — ours.
-          </small>
-        </div>
-      </div>
+    <>
+      <section aria-labelledby="ends-h">
+        <h2 id="ends-h">20 ways the week ends</h2>
+        <OutcomeDots q={odds.q} oppName={oppName} />
+      </section>
 
-      <OutcomeDots q={odds.q} oppName={oppName} />
+      <section aria-labelledby="race-h">
+        <h2 id="race-h">Scored and projected</h2>
+        <RaceBars rows={[
+          { name: 'You', tone: 'you', now: me.banked, mu: me.mu, sd: me.sd },
+          { name: oppName, tone: 'opp', now: opp.banked, mu: opp.mu, sd: opp.sd },
+        ]} />
+      </section>
 
-      <h3>Where the week stands</h3>
-      <RaceBars rows={[
-        { name: 'You', tone: 'you', now: me.banked, mu: me.mu, sd: me.sd },
-        { name: oppName, tone: 'opp', now: opp.banked, mu: opp.mu, sd: opp.sd },
-      ]} />
-
-      <h3>Players with a game, night by night</h3>
-      <NightBars dates={odds.nights} slots={slots} today={today} series={[
-        { name: 'You', tone: 'you', values: myNights },
-        { name: oppName, tone: 'opp', values: oppNights },
-      ]} />
-      <p className="chartnote">
-        {edge === 0 ? 'Even on usable games: the calendar is not deciding this one.'
-          : `${edge > 0 ? 'You have' : `${oppName} has`} ${Math.abs(edge)} more usable game${Math.abs(edge) === 1 ? '' : 's'} left. `}
-        {edge !== 0 && 'Games above the line need a slot that is already full, so they score nothing.'}
-      </p>
-
-      {(danger || matchupEdge != null) && (
-        <ul className="oddsfacts">
-          {danger && <li><b>{fmt(danger.mu, 0)}</b> <span>his biggest threat: {danger.name}, over {danger.games} {danger.games === 1 ? 'game' : 'games'}</span></li>}
-          {matchupEdge != null && (
-            <li>
-              <b>{matchupEdge > 0 ? `+${fmt(matchupEdge, 1)}` : fmt(matchupEdge, 1)}</b>
-              <span>
-                <Tip text="Your total with the defences your players actually draw this week, minus the same total against an average defence. Guards, forwards and centres are priced separately.">from who you draw</Tip>
-                {' '}this week, against an average week
-              </span>
-            </li>
-          )}
-        </ul>
-      )}
+      <section aria-labelledby="nights-h">
+        <h2 id="nights-h">Nights left</h2>
+        <NightBars dates={odds.nights} slots={slots} today={today} series={[
+          { name: 'You', tone: 'you', values: myNights },
+          { name: oppName, tone: 'opp', values: oppNights },
+        ]} />
+        <p className="note">
+          {edge === 0 ? 'Even on usable games.' : <><b>{edge > 0 ? 'You' : oppName}</b> {edge > 0 ? 'have' : 'has'} {Math.abs(edge)} more usable game{Math.abs(edge) === 1 ? '' : 's'}.</>}
+          {matchupEdge != null && <> <Tip text="This week's defences, back-to-backs and returns, against a plain week">Schedule</Tip>: {sfmt(matchupEdge, 1)} pts.</>}
+          {danger && <> Their biggest threat: <b>{danger.name}</b>, {fmt(danger.mu, 0)} pts.</>}
+        </p>
+      </section>
 
       {swing.length > 0 && (
-        <>
-          <h3>Who the week rests on</h3>
-          <table className="t">
+        <section aria-labelledby="swing-h">
+          <h2 id="swing-h">Who the week rests on</h2>
+          <table className="t swing">
             <thead><tr>
-              <th>Player</th><th className="num">Games</th><th className="num">Points</th>
-              <th className="num" style={{ width: 120 }}><Tip text="How far the win chance above falls if he misses the rest of the week. Recomputed without him, not a share of the total.">If he sits</Tip></th>
+              <th>Player</th><th className="num">Games</th><th className="num">Pts</th>
+              <th className="num"><Tip text="Win chance lost if he sits the rest of the week">If he sits</Tip></th>
             </tr></thead>
             <tbody>
               {swing.map((p) => (
@@ -274,17 +148,8 @@ function Odds({ odds, updated, dvp, oppName, slots, today }) {
               ))}
             </tbody>
           </table>
-        </>
+        </section>
       )}
-
-      <small className="oddsnote">
-        Built on form from {updated ? new Date(updated).toLocaleDateString() : 'the last worker run'}
-        {dvp ? `, and on ${dvp.season} defence by position` : ', with no defence table yet'}.
-        A man's nights are priced as moving together, because a bad week is usually bad all
-        week; teammates sharing a ball are not, yet.
-        {sdScale && Math.abs(sdScale - 1) >= 0.01 ? ` Grading says the spread runs ${sdScale > 1 ? 'tight' : 'wide'}, so it is ${sdScale > 1 ? 'widened' : 'narrowed'} by ${Math.round(Math.abs(sdScale - 1) * 100)}%.` : ''}
-        {' '}How well this has held up is on the <a href="#scorecard">Scorecard</a>.
-      </small>
-    </section>
+    </>
   )
 }

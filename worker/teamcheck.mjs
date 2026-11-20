@@ -10,7 +10,9 @@
 import playersApi from '../api/players.js'
 import newsApi from '../api/news.js'
 import { DEFAULT_ROSTER, DEFAULT_SETTINGS, bestLineup, computeValues, etToday, gameOn, gamesBetween, normName, splitIR, tagNews, weekBounds } from '../src/lib/model.js'
-import { availability } from '../src/lib/predict.js'
+import { availability, isB2B, priceGames, projectPlayer } from '../src/lib/predict.js'
+import { rankMoves } from '../src/lib/decide.js'
+import { readFileSync } from 'node:fs'
 
 // Call a Vercel handler in-process: no server, no Vercel CLI.
 const call = (handler, query = {}) => new Promise((resolve, reject) => {
@@ -78,12 +80,46 @@ const fresh = mine.flatMap((p) => (newsBy.get(p.id) || [])
   .filter((n) => Date.now() - Date.parse(n.date) < 24 * 3600e3 && (n.src === 'RotoWire' || n.title.includes(last(p.name))))
   .map((n) => ({ p, n })))
 
-// The best pickup this week: free by the app's own guess, healthy, and clearly better than
-// the weakest man holding an active spot once his games left this week are counted.
+// The waiver idea comes from the decision layer the app uses (src/lib/decide.js), priced the
+// way the app prices a side: projection, then per-game play chance and opponent from priceGames.
 const worst = active[active.length - 1]
-const weekVal = (p) => val(p) * games(p).length
+const readData = (f) => { try { return JSON.parse(readFileSync(new URL(`../public/data/${f}`, import.meta.url), 'utf8')) } catch { return null } }
+const form = readData('form.json')
+const dvp = readData('dvp.json')
+const formBy = new Map((form?.players || []).map((r) => [r.norm, r]))
+// A form.json more than 3 days old has its recent misses ignored (spec, change 0).
+const formFresh = !!form && Date.now() - Date.parse(form.updated) < 3 * 864e5
+const now = Date.now()
+const plus = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10)
+const nextMon = plus(weekEnd, 1)
+function price(p) {
+  const a = avail(p)
+  const f = formBy.get(normName(p.name))
+  const cal = teams[p.team]?.games || []
+  // A game that has tipped is already in ESPN's score, as in today.js priceSide.
+  const sched = (from, to) => gamesBetween(teams[p.team], from, to).filter((g) => g.d > today || g.t > now)
+    .map((g) => ({ d: g.d, opp: teams[g.opp]?.abbrev, b2b: isB2B(cal, g.d) }))
+  const opts = { today, status: a.status, longOut: a.longOut, form: f, formFresh, dvp, pos: p.pos }
+  const wk = priceGames({ games: sched(today, weekEnd), ...opts })
+  const tip = gameOn(teams[p.team], today)
+  return {
+    id: p.id, name: p.name, pos: p.pos, status: a.status, longOut: a.longOut, val: val(p),
+    ...projectPlayer({ espnFp: values.get(p.id)?.fp, form: f, status: a.status, current: !!form?.is_current_season, formFresh }),
+    ...wk, games: wk.dates.length, next: priceGames({ games: sched(nextMon, plus(nextMon, 6)), ...opts }),
+    irEligible: ['OUT', 'INJURY_RESERVE'].includes(p.inj), locked: !!tip && tip.t <= now,
+  }
+}
+// "Free" is a guess from ESPN-wide ownership: the league is private. The 40 most valuable are
+// enough; rankMoves looks at 12 for swaps.
 const free = players.filter((p) => !mineIds.includes(p.id) && p.own < s.ownCutoff && avail(p).status === 'ok')
-const pickups = free.filter((p) => weekVal(p) > weekVal(worst) + 4).sort((a, b) => weekVal(b) - weekVal(a)).slice(0, 3)
+  .sort((a, b) => val(b) - val(a)).slice(0, 40)
+const nights = Array.from({ length: 7 }, (_, i) => plus(weekBounds(today)[0], i)).filter((d) => d >= today)
+// ponytail: the real IR is not visible from here; splitIR's guess stands in for it, and its
+// men are left out of the move list rather than offered for activation.
+const ideas = rankMoves({
+  today, nights, slots, rosterSize: s.rosterSize, roster: active.map(price), irOpen: Math.max(0, s.ir - ir.length),
+  free: free.map(price), opp: null, max: 4,
+}).filter((m) => m.kind !== 'start')
 const hot = active.filter((p) => (values.get(p.id)?.trend ?? 0) > 4)
 const cold = active.filter((p) => (values.get(p.id)?.trend ?? 0) < -4)
 
@@ -124,12 +160,16 @@ if (hot.length) out.push(`- Hot: ${hot.map((p) => `${last(p.name)} (+${f1(values
 if (cold.length) out.push(`- Cold: ${cold.map((p) => `${last(p.name)} (${f1(values.get(p.id).trend)} pts/g)`).join(', ')}.`)
 
 out.push('', '## Waiver idea')
-if (pickups.length && worst) {
-  for (const p of pickups) {
-    out.push(`- ${p.name} (${teams[p.team]?.abbrev ?? 'FA'}, ${p.pos.join('/')}): ${games(p).length} games left, value ${f1(val(p))} against ${last(worst.name)}'s ${f1(val(worst))}. Owned in ${p.own.toFixed(0)}% of ESPN leagues.`)
+const sign = (x) => `${x >= 0 ? '+' : ''}${f1(x)}`
+const moves = ideas.filter((m) => m.kind !== 'hold')
+if (moves.length) {
+  for (const m of moves) {
+    const own = byId.get(m.add)?.own
+    out.push(`- ${m.title}: ${sign(m.gainPts)} pts this week, ${sign(m.gainNext)} next. ${m.reason[0].toUpperCase()}${m.reason.slice(1)}.${own != null ? ` Owned in ${own.toFixed(0)}% of ESPN leagues.` : ''}${m.blocked ? ` (${m.blocked})` : ''}`)
   }
   out.push('', `"Free" is a guess from ESPN-wide ownership under ${s.ownCutoff}%: check your league before you add.`)
 } else out.push(`- Nobody probably free beats ${worst ? last(worst.name) : 'your weakest player'} this week by enough to bother.`)
+if (!formFresh) out.push(`- form.json is from ${form?.updated?.slice(0, 10) ?? 'nowhere'}: recent missed games are not read until the worker runs.`)
 
 if (fresh.length) {
   out.push('', '## News in the last 24 hours')

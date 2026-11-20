@@ -10,9 +10,12 @@ derived artifacts the website reads.
     python ingest.py friction     pairings -> ../public/data/friction.json
     python ingest.py matchups     defender vs scorer -> ../public/data/matchups.json
     python ingest.py all          logs, form, export, dvp, friction, matchups
+    python ingest.py --selfcheck  asserts on the pure parts (no network)
 
 Runs on the laptop, not a server: NBA refuses datacenter IPs. See ../docs/engine/SOURCES.md.
-Nothing here touches ESPN — the browser does that, with credentials that stay on your devices.
+When stats.nba.com does not answer, `logs` falls back to ESPN's public box scores (no key, no
+cookies). Your ESPN account is never touched here: the browser does that, with credentials
+that stay on your devices.
 """
 import argparse
 import json
@@ -22,7 +25,8 @@ import sqlite3
 import sys
 import time
 import unicodedata
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -32,6 +36,15 @@ DATA = os.path.join(HERE, os.pardir, "public", "data")  # Vite serves public/ at
 
 THIS_SEASON = "2026-27"   # the 2026-27 NBA season; ESPN calls it 2027 in api/players.js
 LAST_SEASON = "2025-26"
+SEASON_START = "2026-10-20"   # opening night of THIS_SEASON; the ESPN back-fill starts here
+
+# ESPN's public scoreboard and box scores. Used when stats.nba.com hangs (it timed out from
+# this Mac all evening on 2026-11-19); same stats, keyed by ESPN ids and abbreviations.
+ESPN_SITE = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba"
+ESPN_DELAY = 0.4   # seconds between uncached calls: one person's nightly job, not a crawler
+# ESPN and the NBA disagree about six abbreviations. The db, dvp.json and predict.js all use
+# the NBA's, so ESPN rows are translated on the way in (predict.js holds the same map).
+NBA_ABBREV = {"GS": "GSW", "NO": "NOP", "NY": "NYK", "SA": "SAS", "UTAH": "UTA", "WSH": "WAS"}
 
 # Your league's scoring, mirroring DEFAULT_WEIGHTS in src/lib/model.js. A fantasy point here
 # has to mean the same thing it means in the app, or every number downstream is a different
@@ -111,6 +124,12 @@ create index if not exists friction_pair on friction_events (player_id, other_id
 create table if not exists runs (
   job text not null, season text not null, at text not null, rows integer not null
 );
+
+-- ESPN responses already fetched. A final box score never changes, so it is read once;
+-- a scoreboard is kept only once every game on it is over.
+create table if not exists espn_cache (
+  url text primary key, body text not null, at text not null
+);
 """
 
 
@@ -163,17 +182,34 @@ def fantasy_points(r):
 # ---------------------------------------------------------------- jobs
 
 def job_logs(seasons):
+    """One try at stats.nba.com per season. If it hangs, this season comes from ESPN's box
+    scores instead, and a past season keeps the rows already stored."""
     con = db()
     total = 0
     for season in seasons:
         print(f"  {season}: asking for every player game log…")
-        payload = get("playergamelogs", {
-            "Season": season, "SeasonType": "Regular Season", "LeagueID": "00",
-            "PerMode": "Totals", "MeasureType": "Base",
-        })
+        try:
+            payload = get("playergamelogs", {
+                "Season": season, "SeasonType": "Regular Season", "LeagueID": "00",
+                "PerMode": "Totals", "MeasureType": "Base",
+            }, tries=1, timeout=15)
+        except SystemExit as e:
+            print(f"  {e}")
+            if season == THIS_SEASON:
+                total += job_logs_espn(espn_dates())
+            else:
+                n = con.execute("select count(*) from player_games where season = ?",
+                                (season,)).fetchone()[0]
+                print(f"  {season}: kept the {n} rows already stored")
+            continue
         rows = rows_of(payload)
         print(f"  {season}: {len(rows)} rows")
         with con:
+            # The NBA pull is the whole season, so it replaces any ESPN rows (ESPN event ids do
+            # not start with 00) rather than storing the same games twice under two ids.
+            if rows:
+                con.execute("delete from player_games where season = ? and game_id not like '00%'",
+                            (season,))
             for r in rows:
                 con.execute(
                     "insert or replace into player_games values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -192,11 +228,144 @@ def job_logs(seasons):
     return total
 
 
-def team_game_counts(con, season):
-    """How many games each team actually played. The denominator for availability."""
-    return {team: n for team, n in con.execute(
-        "select team, count(distinct game_id) from player_games where season = ?"
-        " group by team", (season,))}
+# ---------------------------------------------------------------- ESPN box scores
+
+def today_et():
+    """NBA dates are US Eastern; ESPN's scoreboard ?dates= is too."""
+    return datetime.now(ZoneInfo("America/New_York")).date()
+
+
+def espn_dates(start=SEASON_START, end=None):
+    """Every date from opening night to today. Past dates are cached, so re-reading them is
+    free, and a night that failed last time gets filled in this time."""
+    d, end = date.fromisoformat(start), end or today_et()
+    out = []
+    while d <= end:
+        out.append(d.isoformat())
+        d += timedelta(days=1)
+    return out
+
+
+def espn_get(con, url, keep):
+    """JSON from ESPN, from the cache when we have it. `keep(payload)` decides whether this
+    answer is final enough to cache. Sequential and slow on purpose."""
+    hit = con.execute("select body from espn_cache where url = ?", (url,)).fetchone()
+    if hit:
+        return json.loads(hit[0])
+    for attempt in (1, 2):
+        time.sleep(ESPN_DELAY * attempt)
+        try:
+            r = requests.get(url, headers={"User-Agent": HEADERS["User-Agent"]}, timeout=20)
+            if r.status_code == 200:
+                payload = r.json()
+                if keep(payload):
+                    with con:
+                        con.execute("insert or replace into espn_cache values (?,?,?)",
+                                    (url, r.text, datetime.now(timezone.utc).isoformat()))
+                return payload
+            print(f"    HTTP {r.status_code} on {url}")
+        except (requests.exceptions.RequestException, ValueError) as e:
+            print(f"    {type(e).__name__} on {url}")
+    return None
+
+
+def made_att(s):
+    """ESPN writes field goals as "5-11". Returns (5, 11); (0, 0) for anything odd."""
+    try:
+        m, a = s.split("-")
+        return int(m), int(a)
+    except (AttributeError, ValueError):
+        return 0, 0
+
+
+def num(s):
+    try:
+        return int(s)
+    except (TypeError, ValueError):
+        return 0
+
+
+def espn_lines(summary):
+    """One NBA-shaped stat line per player who played, from an ESPN summary payload."""
+    teams = {t["team"]["id"]: (NBA_ABBREV.get(t["team"]["abbreviation"], t["team"]["abbreviation"]),
+                               t.get("homeAway"))
+             for t in summary["header"]["competitions"][0]["competitors"]}
+    out = []
+    for side in summary.get("boxscore", {}).get("players", []):
+        team, home_away = teams.get(side["team"]["id"], (None, None))
+        opp = next((a for k, (a, _) in teams.items() if k != side["team"]["id"]), None)
+        for block in side.get("statistics", []):
+            col = {k: i for i, k in enumerate(block.get("names") or block.get("labels") or [])}
+            for a in block.get("athletes", []):
+                st = a.get("stats") or []
+                if a.get("didNotPlay") or not st:
+                    continue
+                v = lambda k: st[col[k]] if k in col and col[k] < len(st) else None
+                fgm, fga = made_att(v("FG"))
+                tpm, tpa = made_att(v("3PT"))
+                ftm, fta = made_att(v("FT"))
+                out.append({
+                    "espn_id": int(a["athlete"]["id"]), "name": a["athlete"]["displayName"],
+                    "pos": (a["athlete"].get("position") or {}).get("abbreviation") or "",
+                    "TEAM_ABBREVIATION": team,
+                    "MATCHUP": f"{team} {'vs.' if home_away == 'home' else '@'} {opp}",
+                    "MIN": num(v("MIN")), "PTS": num(v("PTS")), "REB": num(v("REB")),
+                    "AST": num(v("AST")), "STL": num(v("STL")), "BLK": num(v("BLK")),
+                    "TOV": num(v("TO")), "FGM": fgm, "FGA": fga, "FTM": ftm, "FTA": fta,
+                    "FG3M": tpm,
+                })
+    return out
+
+
+def job_logs_espn(dates, season=THIS_SEASON):
+    """Box scores from ESPN: one scoreboard per date, one summary per finished game. Writes
+    the same player_games rows the NBA pull does. A player is joined to his NBA id by
+    normalised name; a rookie the db has never seen is stored under his ESPN id, negated,
+    so the two id spaces cannot collide."""
+    con = db()
+    by_norm = {n: pid for pid, n in con.execute("select player_id, norm from players order by player_id")}  # NBA ids (positive) win a tie
+    today = today_et().isoformat()
+    rows = games = fresh = 0
+    print(f"  {season}: ESPN box scores, {dates[0]} to {dates[-1]}")
+    for d in dates:
+        sb = espn_get(con, f"{ESPN_SITE}/scoreboard?dates={d.replace('-', '')}",
+                      keep=lambda p, d=d: d < today and all(
+                          e["status"]["type"].get("state") == "post" for e in p.get("events", [])))
+        if sb is None:
+            print(f"    {d}: no scoreboard, skipped; the next run will retry it")
+            continue
+        for e in sb.get("events", []):
+            if not e["status"]["type"].get("completed"):
+                continue
+            url = f"{ESPN_SITE}/summary?event={e['id']}"
+            cached = con.execute("select 1 from espn_cache where url = ?", (url,)).fetchone()
+            summary = espn_get(con, url, keep=lambda p: True)
+            if summary is None:
+                continue
+            fresh += not cached
+            games += 1
+            with con:
+                for r in espn_lines(summary):
+                    norm = norm_name(r["name"])
+                    pid = by_norm.get(norm)
+                    if pid is None:
+                        pid = by_norm[norm] = -r["espn_id"]
+                    con.execute("insert or replace into players values (?,?,?,?)",
+                                (pid, r["name"], norm, r["TEAM_ABBREVIATION"]))
+                    if r["pos"]:   # dvp buckets by G/F/C; NBA ids already have one from playerindex
+                        con.execute("insert or ignore into player_pos values (?,?)",
+                                    (pid, r["pos"][0].upper()))
+                    con.execute(
+                        "insert or replace into player_games values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (pid, str(e["id"]), season, d, r["TEAM_ABBREVIATION"], r["MATCHUP"],
+                         r["MIN"], r["PTS"], r["REB"], r["AST"], r["STL"], r["BLK"], r["TOV"],
+                         r["FGM"], r["FGA"], r["FTM"], r["FTA"], r["FG3M"], fantasy_points(r)))
+                    rows += 1
+    with con:
+        con.execute("insert into runs values (?,?,?,?)",
+                    ("logs-espn", season, datetime.now(timezone.utc).isoformat(), rows))
+    print(f"  {season}: {games} finished games ({fresh} fetched, the rest cached), {rows} player rows")
+    return rows
 
 
 def form_rows(con, season, min_games=5):
@@ -206,25 +375,37 @@ def form_rows(con, season, min_games=5):
     one with a 5-point spread, and a projection that reports only a mean hides what decides
     close weeks. Availability is the other half — a 40-point player who plays 55 games is
     worth less over a week than a 34-point player who plays 78."""
-    team_games = team_game_counts(con, season)
+    names = dict(con.execute("select player_id, name from players"))
+    rows = [(pid, gid, d, team, mins or 0, fp) for pid, gid, d, team, mins, fp in con.execute(
+        "select player_id, game_id, game_date, team, min, fp from player_games"
+        " where season = ? order by game_date, game_id", (season,))]
+    schedule, miss, em = team_nights(rows)
+    hist = {}
+    for r in reversed(rows):   # newest first, per player
+        hist.setdefault(r[0], []).append(r)
+
     out = []
-    for pid, name, team in con.execute(
-            "select p.player_id, p.name, p.team from players p"
-            " where exists (select 1 from player_games g where g.player_id = p.player_id"
-            "              and g.season = ?)", (season,)):
-        fps = [r[0] for r in con.execute(
-            "select fp from player_games where player_id = ? and season = ?"
-            " order by game_date desc limit 25", (pid, season))]
-        mins = [r[0] or 0 for r in con.execute(
-            "select min from player_games where player_id = ? and season = ?"
-            " order by game_date desc limit 25", (pid, season))]
-        if len(fps) < min_games:
+    for pid, h in hist.items():
+        last = h[:25]
+        if len(last) < min_games or pid not in names:
             continue
+        fps = [r[5] for r in last]
+        mins = [r[4] for r in last]
         mean = sum(fps) / len(fps)
         var = sum((x - mean) ** 2 for x in fps) / (len(fps) - 1)
-        played = con.execute("select count(*) from player_games where player_id = ? and season = ?",
-                             (pid, season)).fetchone()[0]
-        possible = team_games.get(team, 0)
+        min_proj, fp_proj = minutes_first([(r[4], r[5]) for r in h])
+        # His team now is the team of his latest game; its calendar is the yardstick for
+        # availability and for the games he has missed lately.
+        team = h[0][3]
+        cal = schedule.get(team, [])
+        mine = {r[1] for r in h}
+        missed3 = sum(1 for g in cal[-3:] if g not in mine)
+        gap = 0
+        for g in reversed(cal):
+            if g in mine:
+                break
+            gap += 1
+        name = names[pid]
         out.append({
             "name": name, "nba_id": pid, "team": team, "norm": norm_name(name),
             "g": len(fps),
@@ -233,10 +414,94 @@ def form_rows(con, season, min_games=5):
             "fp_sd": round(math.sqrt(var), 2),
             # Share of his team's games he actually appeared in. Traded players look worse
             # than they are here, which is why it is a prior the injury report overrides.
-            "avail": round(min(1.0, played / possible), 3) if possible else None,
+            "avail": round(min(1.0, len(h) / len(cal)), 3) if cal else None,
+            "fp_proj": round(fp_proj, 2), "min_proj": round(min_proj, 1),
+            "missed3": missed3, "gap": gap, "last_game": h[0][2],
+            "miss_avg": round(sum(miss.get((pid, r[1]), 0) for r in last) / len(last), 1),
+            "min_recent": round(em.get(pid, 0), 1),
         })
     out.sort(key=lambda r: -r["fp_mean"])
     return out
+
+
+# Minutes first (spec change 2, fitted on weeks 3-13 of 2025-26 in worker/experiments).
+MIN_HALF_LIFE = 8      # games: minutes move fast
+RATE_HALF_LIFE = 40    # games: points per minute moves slowly
+RATE_PRIOR_MIN = 100   # minutes of weight pulling the rate to the pool's
+POOL_RATE = 1.276      # fantasy points a minute across the pool
+
+
+def minutes_first(games):
+    """games newest first as [(min, fp)]. Returns (min_proj, fp_proj): a fast minutes
+    estimate times a slow, shrunk points-per-minute rate. Must match formFrom in backtest.mjs."""
+    wm = [0.5 ** (k / MIN_HALF_LIFE) for k in range(len(games))]
+    wr = [0.5 ** (k / RATE_HALF_LIFE) for k in range(len(games))]
+    min_proj = sum(w * m for w, (m, _) in zip(wm, games)) / sum(wm)
+    rate = ((sum(w * fp for w, (_, fp) in zip(wr, games)) + RATE_PRIOR_MIN * POOL_RATE)
+            / (sum(w * m for w, (m, _) in zip(wr, games)) + RATE_PRIOR_MIN))
+    return min_proj, min_proj * rate
+
+
+def team_nights(rows):
+    """One pass in date order, ported from enrich() in worker/experiments/lib.mjs.
+    rows: (pid, gid, date, team, min, fp), oldest first. Returns
+      schedule  team -> its game ids in date order
+      miss      (pid, gid) -> running minutes of teammates who played in one of the team's
+                last 10 games and sat this one, counted before the game (spec change 5)
+      em        pid -> his running minutes average after his latest game"""
+    games = {}
+    for r in rows:
+        games.setdefault(r[1], {}).setdefault(r[3], []).append(r)
+    schedule, miss, em, last, cur, members = {}, {}, {}, {}, {}, {}
+    for gid, sides in games.items():   # dicts keep insertion order, which is date order
+        for team, rs in sides.items():
+            i = len(schedule.get(team, []))
+            playing = {r[0] for r in rs if r[4] > 0}
+            m = sum(em[p] for p in members.get(team, ()) if p not in playing and i - last[p] <= 10)
+            for r in rs:
+                miss[(r[0], gid)] = m
+        for team, rs in sides.items():
+            i = len(schedule.get(team, []))
+            for pid, _, _, _, mins, _ in rs:
+                if mins <= 0:
+                    continue
+                em.setdefault(pid, mins)
+                if cur.get(pid) != team:
+                    members.get(cur.get(pid), set()).discard(pid)
+                    members.setdefault(team, set()).add(pid)
+                    cur[pid] = team
+                em[pid] += 0.25 * (mins - em[pid])
+                last[pid] = i
+            schedule.setdefault(team, []).append(gid)
+    return schedule, miss, em
+
+
+def selfcheck():
+    """The pure parts, no network. python3 -I ingest.py --selfcheck"""
+    g8 = [(m, m) for m in (30, 30, 30, 30, 20, 20, 20, 20)]   # newest first; plain mean 25
+    _, fp8 = minutes_first(g8)
+    assert abs(fp8 - 28.32) < 0.01, fp8
+    assert made_att("5-11") == (5, 11) and made_att("") == (0, 0)
+    # Team A plays 4 games; p2 (34 min) sits the last two. Before game 3, 34 minutes are
+    # missing; p2 has missed 2 of the last 3 and 2 in a row.
+    rows = []
+    for k in range(4):
+        rows.append((1, f"g{k}", f"2026-11-0{k + 1}", "A", 30, 30.0))
+        if k < 2:
+            rows.append((2, f"g{k}", f"2026-11-0{k + 1}", "A", 34, 40.0))
+    sched, miss, em = team_nights(rows)
+    assert sched["A"] == ["g0", "g1", "g2", "g3"]
+    assert miss[(1, "g2")] == 34 and miss[(1, "g1")] == 0 and em[2] == 34
+    con = sqlite3.connect(":memory:")
+    con.executescript(SCHEMA)
+    for pid, gid, d, team, mins, fp in rows:
+        con.execute("insert into player_games (player_id, game_id, season, game_date, team, min, fp)"
+                    " values (?,?,?,?,?,?,?)", (pid, gid, "x", d, team, mins, fp))
+    con.executemany("insert into players values (?,?,?,?)", [(1, "One", "one", "A"), (2, "Two", "two", "A")])
+    two = {r["nba_id"]: r for r in form_rows(con, "x", min_games=1)}[2]
+    assert (two["missed3"], two["gap"], two["avail"], two["last_game"]) == (2, 2, 0.5, "2026-11-02"), two
+    print(f"selfcheck ok: fp_proj {fp8:.2f} for the eight-game case")
+    return 0
 
 
 def job_form():
@@ -258,7 +523,8 @@ def job_export():
     os.makedirs(DATA, exist_ok=True)
     path = os.path.join(DATA, "form.json")
     payload = {
-        "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        # Eastern time with its offset: the date matches the NBA's night, and Date.parse reads it.
+        "updated": datetime.now(ZoneInfo("America/New_York")).isoformat(timespec="seconds"),
         "season": season,
         # Whether these are this season's own games or last season's, which decides how much
         # weight the app gives them against ESPN's projection.
@@ -358,7 +624,10 @@ def job_dvp():
         if not con.execute("select 1 from player_games where season = ? limit 1",
                            (season,)).fetchone():
             continue
-        job_positions(season)
+        try:
+            job_positions(season)
+        except SystemExit as e:   # NBA down: ESPN rows carry their own G/F/C (job_logs_espn)
+            print(f"  {e} Using the {con.execute('select count(*) from player_pos').fetchone()[0]} positions stored.")
         teams, base, skipped = dvp_rows(con, season)
         if len(teams) < 20:
             print(f"  {season}: only {len(teams)} teams have enough games; trying the season before")
@@ -669,12 +938,15 @@ def main():
     ap.add_argument("job", nargs="?", choices=sorted(JOBS), help="; ".join(
         f"{k}: {v}" for k, v in JOBS.items()))
     ap.add_argument("--check", action="store_true", help="can this machine reach stats.nba.com?")
+    ap.add_argument("--selfcheck", action="store_true", help="asserts on the pure parts, no network")
     ap.add_argument("--season", default=None, help="one season, e.g. 2025-26")
     ap.add_argument("--limit", type=int, default=None, help="pbp: stop after this many games")
     args = ap.parse_args()
 
     if args.check:
         return check()
+    if args.selfcheck:
+        return selfcheck()
     if not args.job:
         ap.print_help()
         return 0

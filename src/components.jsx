@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom'
 import { Command } from 'cmdk'
 import { CATS, etToday, fantasyPoints, gamesBetween, tagNews, weekBounds } from './lib/model.js'
 import { BarList, WeekStrip } from './charts.jsx'
-import { defenderHistory, frictionFor } from './lib/predict.js'
-import './pages/extras.css'
 
-export const fmt = (x, d = 1) => (x == null || Number.isNaN(x) ? '–' : x.toFixed(d))
+// A true minus, and no '-0.0': a value that rounds to zero prints as zero.
+export const fmt = (x, d = 1) => (x == null || Number.isNaN(x) ? '–' : (Math.abs(x) < 0.5 / 10 ** d ? 0 : x).toFixed(d).replace('-', '−'))
+// Signed: '+' only when the printed value is above zero.
+export const sfmt = (x, d = 1) => (x != null && Math.abs(x) >= 0.5 / 10 ** d && x > 0 ? '+' : '') + fmt(x, d)
 export const ago = (iso) => {
   const h = (Date.now() - new Date(iso)) / 36e5
-  return h < 1 ? `${Math.max(1, Math.round(h * 60))}m ago` : h < 48 ? `${Math.round(h)}h ago` : `${Math.round(h / 24)}d ago`
+  return `${h < 1 ? `${Math.max(1, Math.round(h * 60))}m` : h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`}\u00a0ago`
 }
 
 // Value's heat. Linear opacity made everyone below about a third of the best player look
@@ -57,7 +58,7 @@ export function FlagBadge({ ctx, p }) {
   const { flags } = ctx.avail(p)
   if (!flags.length) return null
   const kinds = [...new Set(flags.map((f) => f.tag))]
-  const text = `${flags.map((f) => f.title).join(' · ')} — surfaced, not priced: this changes no projection in the app.`
+  const text = `${flags.map((f) => f.title).join(' · ')} (not in any projection)`
   return <Tip text={text}><span className="badge flag">{kinds.includes('legal') ? 'LEGAL' : 'OFF-COURT'}</span></Tip>
 }
 
@@ -68,7 +69,7 @@ export function PlayerName({ ctx, p, sub = true }) {
     <span className="pname">
       <button className="link" onClick={() => ctx.open(p.id)}>{p.name}</button>
       <StatusBadge ctx={ctx} p={p} />
-      {fresh && <Tip text="News in the last 24 hours. Click his name to read it."><span className="dot" /></Tip>}
+      {fresh && <Tip text="News in the last 24 hours"><span className="dot" /></Tip>}
       {sub && <small>{team?.abbrev || 'FA'} · {p.pos.join('/')}</small>}
     </span>
   )
@@ -84,9 +85,7 @@ export function ZCell({ z }) {
 export const catHeaders = (settings) => CATS.filter((c) => !settings.punt.includes(c.k))
 
 export const ValueTip = ({ settings }) => (
-  <Tip text={settings.format === 'points'
-    ? 'Fantasy points per game above what a free agent off waivers would give you. 0 = easy to replace.'
-    : 'Sum of his category scores above a free agent off waivers. 0 = easy to replace. Higher is better.'}>Value</Tip>
+  <Tip text={settings.format === 'points' ? 'Points a game above a waiver pickup' : 'Category score above a waiver pickup'}>Value</Tip>
 )
 
 export function Tags({ tags }) {
@@ -131,7 +130,7 @@ export function plainTake(ctx, p) {
   return out
 }
 
-const LINE_ROWS = [['proj', 'Projection (this season)'], ['cur', 'This season so far'], ['l15', 'Last 15 days'], ['last', 'Last season']]
+const LINE_ROWS = [['proj', 'Projected'], ['cur', 'This season so far'], ['l15', 'Last 15 days'], ['last', 'Last season']]
 // The same stretches in the order they happened, for the bar chart: read top to bottom it is
 // the direction he is heading.
 const STRETCHES = [['last', 'Last season'], ['proj', 'Projected'], ['cur', 'This season'], ['l15', 'Last 15 days']]
@@ -150,83 +149,16 @@ function Stretches({ ctx, p }) {
       <h3>Fantasy points a game</h3>
       <BarList rows={rows} hi={latest.key} />
       {diff != null && Math.abs(diff) >= 1 && (
-        <small className="muted">{latest.label}: {diff > 0 ? '+' : '\u2212'}{fmt(Math.abs(diff))} a game against his projection{Math.abs(diff) >= 4 ? (diff > 0 ? ', a real hot streak' : ', a real slump: check the news') : ''}.</small>
+        <p className="note">{latest.label}: {diff > 0 ? '+' : '\u2212'}{fmt(Math.abs(diff))} a game against projection</p>
       )}
     </>
   )
 }
 
-const STAT_HEAD = [['MIN', 'Minutes'], ['PTS', 'Points'], ['REB', 'Rebounds'], ['AST', 'Assists'], ['STL', 'Steals'], ['BLK', 'Blocks'], ['3PM', '3-pointers made'], ['FG%', 'Field goal %'], ['FT%', 'Free throw %'], ['TO', 'Turnovers (lower is better)'], ['GP', 'Games played']]
+// The stats the scoring leans on, nothing else: eight numbers fit the panel at every width
+// without a sideways scroll.
+const STAT_HEAD = [['pts', 'PTS', 'Points'], ['reb', 'REB', 'Rebounds'], ['ast', 'AST', 'Assists'], ['stl', 'STL', 'Steals'], ['blk', 'BLK', 'Blocks'], ['to', 'TO', 'Turnovers (lower is better)'], ['tpm', '3PM', '3-pointers made'], ['min', 'MIN', 'Minutes']]
 const OWNERS = [['mine', 'On my team'], ['taken', 'Another team'], ['free', 'Available']]
-
-// Possession-by-possession history against the men who guard him. The ones he runs into
-// this week come first and are marked: the same 31% is trivia against someone retired and
-// a reason to think against Thursday's starter.
-function Guards({ ctx, p }) {
-  const today = etToday()
-  const [, weekEnd] = weekBounds(today)
-  const facing = gamesBetween(ctx.teams[p.team], today, weekEnd).map((g) => ctx.teams[g.opp]?.abbrev)
-  const rows = defenderHistory(ctx.matchups, p.name, facing)
-  if (!rows.length) return null
-  return (
-    <>
-      <h3>Who guards him</h3>
-      <div className="scroll dstats">
-        <table className="t small">
-          <thead><tr>
-            <th>Defender</th>
-            <th className="num"><Tip text="Possessions the NBA charged to this pairing. Under 30 it is left out entirely.">Poss</Tip></th>
-            <th className="num"><Tip text="Points he scored against this defender per 100 of those possessions. Comparable across defenders who guarded him for very different stretches.">Pts/100</Tip></th>
-            <th className="num"><Tip text="His field goal percentage in those possessions. Blank under 10 attempts, because below that it is a coin flip with a decimal point.">FG%</Tip></th>
-            <th className="num">TO</th>
-          </tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className={r.thisWeek ? 'hit' : ''}>
-                <td>
-                  {r.name}
-                  {r.team ? <small className="muted"> {r.team}</small> : <small className="muted"> not in the league</small>}
-                  {r.thisWeek && <span className="tag info">this week</span>}
-                </td>
-                <td className="num">{fmt(r.poss, 0)}</td>
-                <td className="num strong">{fmt(r.pts100, 1)}</td>
-                <td className="num">{r.fg == null ? '–' : fmt(r.fg * 100, 0)}</td>
-                <td className="num">{fmt(r.tov, 1)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <small className="muted">
-        {ctx.matchups?.season} regular season, {ctx.matchups?.min_poss}+ possessions, his {ctx.matchups?.top_n} most frequent defenders.
-      </small>
-    </>
-  )
-}
-
-// Flagrant fouls and double technicals name both men. Single technicals name only one, so
-// they are counted and never paired. Nothing here touches a projection.
-function Friction({ ctx, p }) {
-  const rows = frictionFor(ctx.friction, p.name)
-  if (!rows.length) return null
-  return (
-    <>
-      <h3>History with</h3>
-      <ul className="take">
-        {rows.map((r) => (
-          <li key={r.name}>
-            <b>{r.name}</b> — {Object.entries(r.kinds).map(([k, n]) => `${n} ${k}${n > 1 ? 's' : ''}`).join(', ')}
-            {r.last && <span className="muted">, last on {r.last}</span>}
-          </li>
-        ))}
-      </ul>
-      <small className="muted">
-        Both men named in the same flagrant foul or double technical, {ctx.friction?.season}. This
-        changes no number in the app — there is no honest way to price a grudge. It is here to read.
-      </small>
-    </>
-  )
-}
 
 export function PlayerDrawer({ ctx, p, onClose }) {
   const [press, setPress] = useState(null)
@@ -263,10 +195,10 @@ export function PlayerDrawer({ ctx, p, onClose }) {
       .then((j) => setPress(j.news.map((n) => ({ ...n, tags: tagNews(n.title) })))).catch(() => setPress([]))
   }
   const facts = [
-    v && ['Value', fmt(v.val), 'How much better he is than the best free agent. 0 = anyone could replace him.'],
-    v && ['Rank', `#${v.rank}`, 'Where his value ranks among all players right now.'],
-    v && pts && ['Pts / game', fmt(v.fp), 'Fantasy points he should score per game in your league.'],
-    p.adp && ['Drafted', `~#${Math.round(p.adp)}`, 'Where managers usually pick him in ESPN drafts.'],
+    v && ['Value', fmt(v.val), 'Points a game above a waiver pickup'],
+    v && ['Rank', `#${v.rank}`, 'Rank by value'],
+    v && pts && ['Pts a game', fmt(v.fp), 'Projected fantasy points a game'],
+    p.adp && ['Drafted', `#${Math.round(p.adp)}`, 'Average ESPN draft pick'],
   ].filter(Boolean)
   return (
     <div className="scrim" onClick={onClose}>
@@ -275,7 +207,7 @@ export function PlayerDrawer({ ctx, p, onClose }) {
           <div className="dtitle">
             <h2 id="drawer-title">{p.name} <StatusBadge ctx={ctx} p={p} /> <FlagBadge ctx={ctx} p={p} /></h2>
             <div className="muted">{ctx.teams[p.team]?.name || 'Free agent'} · {p.pos.join('/')}</div>
-            {ctx.teams[p.team] && <div className="dweek"><span className="lbl">This week</span><WeekStrip team={ctx.teams[p.team]} teams={ctx.teams} mon={weekBounds(etToday())[0]} today={etToday()} /></div>}
+            {ctx.teams[p.team] && <div className="dweek"><span className="muted">This week</span><WeekStrip team={ctx.teams[p.team]} teams={ctx.teams} mon={weekBounds(etToday())[0]} today={etToday()} /></div>}
           </div>
           <button className="x" onClick={onClose} aria-label="Close player panel">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
@@ -289,7 +221,7 @@ export function PlayerDrawer({ ctx, p, onClose }) {
         )}
 
         <div className="downer">
-          <span id="owner-label">Where is he?</span>
+          <span id="owner-label">Owner</span>
           <div className="seg" role="group" aria-labelledby="owner-label">
             {OWNERS.map(([k, label]) => (
               <button key={k} className={owner === k ? 'on' : ''} aria-pressed={owner === k} onClick={() => ctx.moveTo(p.id, k)}>{label}</button>
@@ -300,7 +232,7 @@ export function PlayerDrawer({ ctx, p, onClose }) {
         {inj && <div className={`banner ${inj.status === 'Out' ? 'bad' : 'warn'}`}><b>{inj.status}:</b> {inj.comment}</div>}
 
         <section className="dtake">
-          <h3>The short version</h3>
+          <h3>Summary</h3>
           <ul className="take">{plainTake(ctx, p).map((t, i) => <li key={i}>{t}</li>)}</ul>
         </section>
 
@@ -320,32 +252,28 @@ export function PlayerDrawer({ ctx, p, onClose }) {
         {ctx.settings.format === 'points' && <Stretches ctx={ctx} p={p} />}
 
         <h3>Stats per game</h3>
-        <div className="scroll dstats">
+        <div className="dstats">
           <table className="t small">
-            <thead><tr><th>Stretch</th>{STAT_HEAD.map(([k, t]) => <th key={k} className="num" title={t}>{k}</th>)}</tr></thead>
+            <thead><tr><th>Stretch</th>{STAT_HEAD.map(([k, h, t]) => <th key={k} className="num" title={t}>{h}</th>)}</tr></thead>
             <tbody>
               {LINE_ROWS.map(([k, label]) => {
                 const l = p.stats[k]; if (!l) return null
-                return <tr key={k}><td>{label}</td>{['min', 'pts', 'reb', 'ast', 'stl', 'blk', 'tpm'].map((s) => <td key={s} className="num">{fmt(l[s])}</td>)}
-                  <td className="num">{l.fga ? fmt((l.fgm / l.fga) * 100, 0) : '–'}</td><td className="num">{l.fta ? fmt((l.ftm / l.fta) * 100, 0) : '–'}</td><td className="num">{fmt(l.to)}</td><td className="num">{fmt(l.gp, 0)}</td></tr>
+                return <tr key={k}><td>{label}</td>{STAT_HEAD.map(([s, h]) => <td key={s} className="num" data-h={h}>{fmt(l[s])}</td>)}</tr>
               })}
             </tbody>
           </table>
         </div>
 
-        <Guards ctx={ctx} p={p} />
-        <Friction ctx={ctx} p={p} />
-
         <h3>Latest news</h3>
-        {news.length ? <ul className="newslist">{news.map((n, i) => <NewsItem key={i} n={n} ctx={ctx} />)}</ul> : <p className="muted">No fantasy news on him in the current feed.</p>}
+        {news.length ? <ul className="newslist">{news.map((n, i) => <NewsItem key={i} n={n} ctx={ctx} />)}</ul> : <p className="muted">No news in the feed.</p>}
         <button className="btn ghost" onClick={loadPress} disabled={press === 'loading'}>
-          {press === 'loading' ? 'Searching…' : 'Search all press from the last 14 days (on and off the court)'}
+          {press === 'loading' ? 'Searching…' : 'Search the press, last 14 days'}
         </button>
         {Array.isArray(press) && (press.length
           ? <ul className="newslist">{press.map((n, i) => <NewsItem key={i} n={n} ctx={ctx} />)}</ul>
           : <p className="muted">Nothing found.</p>)}
 
-        {p.outlook && <><h3>Season outlook (ESPN)</h3><p className="outlook">{p.outlook}</p></>}
+        {p.outlook && <details className="outlook"><summary>ESPN season outlook</summary><p>{p.outlook}</p></details>}
       </aside>
     </div>
   )
@@ -380,7 +308,7 @@ export function PlayerFinder({ ctx, open, setOpen, pages }) {
               return (
                 <Command.Item key={p.id} value={String(p.id)} onSelect={() => go(() => ctx.open(p.id))}>
                   <span className="grow"><b>{p.name}</b><small>{ctx.teams[p.team]?.abbrev || 'FA'} · {p.pos.join('/')}</small></span>
-                  {owner && <span className={`own ${owner}`}>{owner === 'mine' ? 'yours' : 'taken'}</span>}
+                  {owner && term && <span className={`own ${owner}`}>{owner === 'mine' ? 'yours' : 'taken'}</span>}
                   <StatusBadge ctx={ctx} p={p} />
                   <span className="num muted">{fmt(ctx.values.get(p.id)?.val)}</span>
                 </Command.Item>
