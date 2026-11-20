@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { bestLineup, etToday, weekBounds } from '../lib/model.js'
-import { PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt, heat } from '../components.jsx'
+import { FormTag, PlayerName, Tip, ValueTip, ZCell, catHeaders, fmt, heat } from '../components.jsx'
 import { NightBars, WeekHead, WeekStrip, dayName, weekDates } from '../charts.jsx'
 import { nightlyLoad } from '../lib/predict.js'
 import { priceSide } from './today.js'
@@ -38,7 +38,6 @@ export default function Team({ ctx }) {
   const [order, setOrder] = useState('lineup')
   const cats = catHeaders(settings)
   const pts = settings.format === 'points'
-  const swing = pts ? 4 : 1.5
   const slots = settings.slots.split(',').map((x) => x.trim()).filter(Boolean)
   const lineup = bestLineup(activePlayers, slots)
   const slotOf = new Map(lineup.starters.filter((r) => r.player).map((r) => [r.player.id, r.slot]))
@@ -100,7 +99,6 @@ export default function Team({ ctx }) {
           {rows.map(({ slot, p, start }) => {
             const v = values.get(p.id)
             const f = ctx.formBy.get(p.id)
-            const hot = v && v.trend > swing; const cold = v && v.trend < -swing
             const out = ctx.status(p) === 'out'
             return (
               <tr key={p.id} className={`${start ? 'start' : 'bench'}${slot === 'IR' ? ' onir' : ''}${out && start ? ' broken' : ''}`}>
@@ -111,7 +109,7 @@ export default function Team({ ctx }) {
                 {pts ? <td className="num fp">{fmt(v?.fp)}</td> : cats.map((c) => <ZCell key={c.k} z={v?.z[c.k]} />)}
                 <td className="num opt">{f ? fmt(f.fp_sd, 0) : '–'}</td>
                 <td className="num opt">{f?.avail != null ? `${Math.round(f.avail * 100)}%` : '–'}</td>
-                <td className="opt">{hot ? <span className="tag good">Hot</span> : cold ? <span className="tag bad">Cold</span> : <span className="muted">Steady</span>}</td>
+                <td className="opt"><FormTag v={v} settings={settings} /></td>
                 <td className="actions"><button className="icon" onClick={() => ctx.moveTo(p.id, 'free')} aria-label={`Remove ${p.name}`}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
                 </button></td>

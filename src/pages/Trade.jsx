@@ -83,7 +83,7 @@ export default function Trade({ ctx }) {
                 <li key={p.id} className={giveIds.includes(p.id) ? 'on' : ''}>
                   <label>
                     <input type="checkbox" checked={giveIds.includes(p.id)} onChange={() => toggle(setGive, p.id)} />
-                    <span className="grow">{p.name} <span className="muted">{sub(p)}</span></span>
+                    <span className="grow"><span className="pn">{p.name}</span> <span className="muted">{sub(p)}</span></span>
                     <span className="num">{fmt(values.get(p.id)?.val)}</span>
                   </label>
                 </li>
@@ -106,11 +106,11 @@ export default function Trade({ ctx }) {
             <ul className="pick">
               {get.map((p) => (
                 <li key={p.id} className="on">
-                  <span className="grow"><button className="link" onClick={() => ctx.open(p.id)}>{p.name}</button> <span className="muted">{sub(p)}</span></span>
-                  <span className="num">{fmt(values.get(p.id)?.val)}</span>
                   <button className="rm" onClick={() => toggle(setGet, p.id)} aria-label={`Remove ${p.name}`} title="Remove">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
                   </button>
+                  <span className="grow"><button className="link pn" onClick={() => ctx.open(p.id)}>{p.name}</button> <span className="muted">{sub(p)}</span></span>
+                  <span className="num">{fmt(values.get(p.id)?.val)}</span>
                 </li>
               ))}
             </ul>
